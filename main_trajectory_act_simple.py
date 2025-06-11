@@ -467,10 +467,12 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
     parser.add_argument('--num_workers', type=int, default=8, help='number of workers')
     parser.add_argument('--llava_dir', type=str,
-                        default="/LLaVA-7B-Lightening-v1-1", help='llava')
+                        default="/home/lin/proj/pretrained/LLaVA-Lightning-7B-delta-v1-1", help='llava')
     parser.add_argument('--vision_tower', type=str,
                         default="/home/lin/proj/pretrained/clip-vit-large-patch14", help='vision tower')
     parser.add_argument('--sample_rate', type=int, default=1, help='sample rate')
+    parser.add_argument('--stage2_train_iters', type=int, default=200_000, help='stage2_train_iters')
+
 
 
 

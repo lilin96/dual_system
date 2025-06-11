@@ -227,10 +227,10 @@ class BaseTrainTester:
         if torch.cuda.is_available():
             LCB_model = LCB_model.cuda()
         # LCB_model = LCB_model.to(device)
-        LCB_model = DistributedDataParallel(
-            LCB_model, device_ids=[self.args.local_rank],
-            broadcast_buffers=False, find_unused_parameters=True
-        )
+        # LCB_model = DistributedDataParallel(
+        #     LCB_model, device_ids=[self.args.local_rank],
+        #     broadcast_buffers=False, find_unused_parameters=True
+        # )
 
         # Training loop
         iter_loader = iter(train_loader)

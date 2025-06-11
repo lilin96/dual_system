@@ -30,9 +30,11 @@ class LisaMetaModel:
 
         # Action prediction
         self.pred_act_mlps = nn.Linear(in_dim, in_dim//2)
-        self.pred_pos_act = nn.Linear(in_dim//2, 3) # arm action
-        self.pred_rot_act = nn.Linear(in_dim//2, 6) # arm action
-        self.pred_gripper_act = nn.Linear(in_dim//2, 1) # gripper action (binary)
+        self.decoder_traj = nn.GRUCell(input_size=4, hidden_size=256)
+        self.pred_traj = nn.Linear(256, 2)
+        # self.pred_pos_act = nn.Linear(in_dim//2, 3) # arm action
+        # self.pred_rot_act = nn.Linear(in_dim//2, 6) # arm action
+        # self.pred_gripper_act = nn.Linear(in_dim//2, 1) # gripper action (binary)
 
         for param in self.text_hidden_fcs.parameters():
             param.requires_grad = True
@@ -79,6 +81,7 @@ class LISAForCausalLM(LlavaLlamaForCausalLM):
         images_clip: torch.FloatTensor,
         input_ids: torch.LongTensor,
         labels: torch.LongTensor,
+        target_point: torch.FloatTensor,
         attention_masks: torch.LongTensor,
         tokenizer,
         **kwargs,
@@ -101,17 +104,29 @@ class LISAForCausalLM(LlavaLlamaForCausalLM):
         assert len(self.model.text_hidden_fcs) == 1
         hidden_states.append(self.model.text_hidden_fcs[0](output_hidden_states[-1].float()))
         action_latents = self.model.pred_act_mlps(output_hidden_states[-1][seg_token_mask].float())
-        pos_pred = self.model.pred_pos_act(action_latents)
-        rot_pred = self.model.pred_rot_act(action_latents)
-        gripper_pred = self.model.pred_gripper_act(action_latents)
-        act_pred = torch.cat([pos_pred,rot_pred,gripper_pred],dim=-1)
+        output_wp = list()
+        z = action_latents
+        x = torch.zeros(size=(z.shape[0], 2),
+                        dtype=z.dtype).type_as(z)
+        for _ in range(self.config.pred_len):
+            x_in = torch.cat([x, target_point], dim=1)
+            z = self.decoder_traj(x_in, z)
+            dx = self.pred_traj(z)
+            x = dx + x
+            output_wp.append(x)
+
+        pred_wp = torch.stack(output_wp, dim=1)
+        # pos_pred = self.model.pred_pos_act(action_latents)
+        # rot_pred = self.model.pred_rot_act(action_latents)
+        # gripper_pred = self.model.pred_gripper_act(action_latents)
+        # act_pred = torch.cat([pos_pred,rot_pred,gripper_pred],dim=-1)
 
         last_hidden_state = torch.stack(hidden_states, dim=-1).sum(dim=-1)
 
         pred_embeddings = last_hidden_state[seg_token_mask]
         ce_loss = 0
-        
-        return pred_embeddings, ce_loss, act_pred
+        return pred_embeddings, ce_loss, pred_wp
+        # return pred_embeddings, ce_loss, act_pred
     
     def evaluate(
         self,

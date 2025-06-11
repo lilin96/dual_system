@@ -113,7 +113,12 @@ def Model_init(vision_tower, llava_dir, torch_dtype):
         if any(
             [
                 x in n
-                for x in ["text_hidden_fcs","pred_act_mlps","pred_pos_act","pred_rot_act", "pred_gripper_act"]
+                for x in ["text_hidden_fcs",
+                        "decoder_traj",
+                          "pred_traj"
+                          # "pred_act_mlps",
+                          # "pred_pos_act","pred_rot_act", "pred_gripper_act"
+                          ]
             ]
         ):
             print("n: ", n, "p.shape: ", p.shape)
