@@ -101,6 +101,7 @@ class TCP(nn.Module):
 				nn.ReLU(inplace=True),
 			)
 		self.decoder_ctrl = nn.GRUCell(input_size=256+4, hidden_size=256)
+		# self.decoder_ctrl = nn.GRUCell(input_size=295, hidden_size=256)
 		self.output_ctrl = nn.Sequential(
 				nn.Linear(256, 256),
 				nn.ReLU(inplace=True),
