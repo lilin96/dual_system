@@ -15,6 +15,7 @@ class LisaMetaModel:
     def __init__(self, config, **kwargs):
         super(LisaMetaModel, self).__init__(config)
 
+        self.text_hidden_fcs = None
         self.config = config
         self.config.out_dim = kwargs["out_dim"]
         self.vision_pretrained = kwargs.get("vision_pretrained", None)
@@ -30,8 +31,8 @@ class LisaMetaModel:
 
         # Action prediction
         self.pred_act_mlps = nn.Linear(in_dim, in_dim//2)
-        self.decoder_traj = nn.GRUCell(input_size=4, hidden_size=256)
-        self.pred_traj = nn.Linear(256, 2)
+        self.decoder_traj = nn.GRUCell(input_size=4, hidden_size=in_dim//2)
+        self.pred_traj = nn.Linear(in_dim//2, 2)
         # self.pred_pos_act = nn.Linear(in_dim//2, 3) # arm action
         # self.pred_rot_act = nn.Linear(in_dim//2, 6) # arm action
         # self.pred_gripper_act = nn.Linear(in_dim//2, 1) # gripper action (binary)
@@ -84,11 +85,19 @@ class LISAForCausalLM(LlavaLlamaForCausalLM):
         target_point: torch.FloatTensor,
         attention_masks: torch.LongTensor,
         tokenizer,
+        pred_len,
         **kwargs,
     ):
         seg_token_mask = input_ids[:, 1:] == self.seg_token_idx
+
+        if torch.cuda.is_available():
+            seg_token_mask = torch.cat([torch.zeros((seg_token_mask.shape[0], 256)).bool().cuda(), seg_token_mask],
+                                       dim=1, )
+        else:
+            seg_token_mask = torch.cat([torch.zeros((seg_token_mask.shape[0], 256)).bool().to(torch.device("mps")), seg_token_mask],
+                                       dim=1, )
         
-        seg_token_mask = torch.cat([torch.zeros((seg_token_mask.shape[0], 256)).bool().cuda(), seg_token_mask], dim=1,) #[bs, 255+sequence_length] 255+82=337
+         #[bs, 255+sequence_length] 255+82=337
         
         output = super().forward(
             images=images_clip,
@@ -108,10 +117,11 @@ class LISAForCausalLM(LlavaLlamaForCausalLM):
         z = action_latents
         x = torch.zeros(size=(z.shape[0], 2),
                         dtype=z.dtype).type_as(z)
-        for _ in range(self.config.pred_len):
-            x_in = torch.cat([x, target_point], dim=1)
-            z = self.decoder_traj(x_in, z)
-            dx = self.pred_traj(z)
+        for _ in range(pred_len):
+            x_in = torch.cat([x,
+                              target_point.to(dtype=torch.float32).to(torch.device("mps"))], dim=1)
+            z = self.model.decoder_traj(x_in, z)
+            dx = self.model.pred_traj(z)
             x = dx + x
             output_wp.append(x)
 

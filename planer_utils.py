@@ -96,7 +96,7 @@ def Model_init(vision_tower, llava_dir, torch_dtype):
         "use_mm_start_end": True,
     }
     
-    model = LISAForCausalLM.from_pretrained(llava_dir, torch_dtype=torch_dtype, low_cpu_mem_usage=True, **model_args).cuda()
+    model = LISAForCausalLM.from_pretrained(llava_dir, torch_dtype=torch_dtype, low_cpu_mem_usage=True, **model_args).to(torch.device("mps"))
     model.config.eos_token_id = tokenizer.eos_token_id
     model.config.bos_token_id = tokenizer.bos_token_id
     model.config.pad_token_id = tokenizer.pad_token_id
@@ -106,7 +106,8 @@ def Model_init(vision_tower, llava_dir, torch_dtype):
 
     model.get_model().initialize_vision_modules(model.get_model().config)
     vision_tower = model.get_model().get_vision_tower()
-    vision_tower.to(dtype=torch_dtype, device=0)
+    # vision_tower.to(dtype=torch_dtype, device=0)
+    vision_tower.to(dtype=torch_dtype, device=torch.device("mps"))
     model.get_model().initialize_lisa_modules(model.get_model().config)
     model.requires_grad_(False)
     for n, p in model.named_parameters():
@@ -116,8 +117,6 @@ def Model_init(vision_tower, llava_dir, torch_dtype):
                 for x in ["text_hidden_fcs",
                         "decoder_traj",
                           "pred_traj"
-                          # "pred_act_mlps",
-                          # "pred_pos_act","pred_rot_act", "pred_gripper_act"
                           ]
             ]
         ):
@@ -336,6 +335,64 @@ def input_processing_real_batch(image_tensor, conv_list, clip_image_processor, t
 
     return image_clip_batch, image_batch, input_ids, attention_masks, targets
 
-    
+
+def input_processing_carla_batch(image_tensor, command_list, clip_image_processor, tokenizer):
+    '''
+    preprocess input (image/text)
+    '''
+    timeone = time.time()
+
+    images = image_tensor.cpu().numpy()
+
+    images = (np.clip(images, 0, 1) * 255).astype(np.uint8)
+
+    images = images.transpose(0, 2, 3, 1)  # (batch_size, H, W, C)
+
+    pil_images = [Image.fromarray(image) for image in images]
+
+    image_clip_batch = clip_image_processor.preprocess(pil_images, return_tensors="pt")["pixel_values"]
+    if torch.cuda.is_available():
+        image_clip_batch = image_clip_batch.to(torch.bfloat16).cuda() # [batch, channels, height, width]
+        image_batch = preprocess(image_tensor.contiguous()).to(torch.bfloat16).cuda()  # [batch, 3, 224, 224]
+    else:
+        image_clip_batch = image_clip_batch.to(torch.bfloat16).to(torch.device("mps"))
+        image_batch = preprocess(image_tensor.contiguous()).to(torch.bfloat16).to(torch.device("mps"))
+
+    from model.llava import conversation as conversation_lib
+    conversation_lib.default_conversation = conversation_lib.conv_templates['llava_v1']
+    conv = conversation_lib.default_conversation.copy()
+    sep = conv.sep + conv.roles[1] + ":"
+    short_input_ids = []
+    for command in command_list:
+        rounds = command.split(conv.sep2)
+        for i, rou in enumerate(rounds):
+            if rou == "":
+                break
+            parts = rou.split(sep)
+            parts[0] += (sep + " " + "<ACT>")
+            if DEFAULT_IMAGE_TOKEN in command:
+                short_input_ids.append(tokenizer_image_token(parts[0], tokenizer, return_tensors="pt"))
+            else:
+                short_input_ids.append(tokenizer(parts[0]).input_ids)
+    if torch.cuda.is_available():
+        input_ids = torch.nn.utils.rnn.pad_sequence(short_input_ids, batch_first=True,
+                                                    padding_value=tokenizer.pad_token_id).cuda()
+    else:
+        input_ids = torch.nn.utils.rnn.pad_sequence(short_input_ids, batch_first=True,
+                                                    padding_value=tokenizer.pad_token_id).to(torch.device("mps"))
+
+    attention_masks = input_ids.ne(tokenizer.pad_token_id).to(torch.device("mps"))
+
+    targets = input_ids.clone().to(torch.device("mps"))
+    targets[:, :] = IGNORE_INDEX
+
+    truncate_len = tokenizer.model_max_length - 255
+
+    if input_ids.shape[1] > truncate_len:
+        input_ids = input_ids[:, :truncate_len]
+        targets = targets[:, :truncate_len]
+        attention_masks = attention_masks[:, :truncate_len]
+
+    return image_clip_batch, image_batch, input_ids, attention_masks, targets
     
     

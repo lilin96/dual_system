@@ -4,6 +4,8 @@ import torch
 from torch import nn
 from TCP.resnet import *
 
+from torch.nn import functional as F
+from torch.distributions import Beta
 
 class PIDController(object):
 	def __init__(self, K_P=1.0, K_I=0.0, K_D=0.0, n=20):
@@ -48,7 +50,7 @@ class TCP(nn.Module):
 						)
 
 		self.join_traj = nn.Sequential(
-							nn.Linear(128+1000, 512),
+							nn.Linear(128+1000+512, 512),
 							nn.ReLU(inplace=True),
 							nn.Linear(512, 512),
 							nn.ReLU(inplace=True),
@@ -136,13 +138,15 @@ class TCP(nn.Module):
 			)
 		
 
-	def forward(self, img, state, target_point):
+	def forward(self, gt, img, state, target_point, embedding,
+				act_pred = None, run_inference=False):
 		feature_emb, cnn_feature = self.perception(img)
 		outputs = {}
 		outputs['pred_speed'] = self.speed_branch(feature_emb)
 		measurement_feature = self.measurements(state)
 		
-		j_traj = self.join_traj(torch.cat([feature_emb, measurement_feature], 1))
+		j_traj = self.join_traj(torch.cat([feature_emb, measurement_feature,
+										   embedding.squeeze()], 1))
 		outputs['pred_value_traj'] = self.value_branch_traj(j_traj)
 		outputs['pred_features_traj'] = j_traj
 		z = j_traj
@@ -202,7 +206,48 @@ class TCP(nn.Module):
 		outputs['future_feature'] = future_feature
 		outputs['future_mu'] = future_mu
 		outputs['future_sigma'] = future_sigma
-		return outputs
+
+		speed_weight = 0.05
+		features_weight = 0.05
+		value_weight = 0.001
+		pred_len = 4
+
+		speed = gt['speed'].to(dtype=torch.float32).view(-1, 1) / 12.
+		dist_sup = Beta(gt['action_mu'], gt['action_sigma'])
+		dist_pred = Beta(outputs['mu_branches'], outputs['sigma_branches'])
+		kl_div = torch.distributions.kl_divergence(dist_sup, dist_pred)
+		action_loss = torch.mean(kl_div[:, 0]) * 0.5 + torch.mean(kl_div[:, 1]) * 0.5
+		speed_loss = F.l1_loss(outputs['pred_speed'], speed) * speed_weight
+
+		value = gt['value'].view(-1, 1)
+		value_loss = (F.mse_loss(outputs['pred_value_traj'], value) + F.mse_loss(outputs['pred_value_ctrl'],
+																				 value)) * value_weight
+		feature = gt['feature']
+		feature_loss = (F.mse_loss(outputs['pred_features_traj'], feature) + F.mse_loss(outputs['pred_features_ctrl'],
+
+																						feature)) * features_weight
+		gt_waypoints = gt['waypoints']
+		future_feature_loss = 0
+		future_action_loss = 0
+		for i in range(pred_len):
+			dist_sup = Beta(gt['future_action_mu'][i], gt['future_action_sigma'][i])
+			dist_pred = Beta(outputs['future_mu'][i], outputs['future_sigma'][i])
+			kl_div = torch.distributions.kl_divergence(dist_sup, dist_pred)
+			future_action_loss += torch.mean(kl_div[:, 0]) * 0.5 + torch.mean(kl_div[:, 1]) * 0.5
+			future_feature_loss += F.mse_loss(outputs['future_feature'][i],
+											  gt['future_feature'][i]) * features_weight
+		future_feature_loss /= pred_len
+		future_action_loss /= pred_len
+		wp_loss = F.l1_loss(outputs['pred_wp'], gt_waypoints, reduction='none').mean()
+		loss = action_loss + speed_loss + value_loss + feature_loss + wp_loss + future_feature_loss + future_action_loss
+
+		if act_pred is None:
+			return loss
+		else:
+			act_pred, start_idx = act_pred
+			wp_llm_loss = F.l1_loss(act_pred, gt_waypoints, reduction='none').mean()
+			loss = 0.2*wp_llm_loss + loss
+			return loss, wp_llm_loss
 
 	def process_action(self, pred, command, speed, target_point):
 		action = self._get_action_beta(pred['mu_branches'].view(1,2), pred['sigma_branches'].view(1,2))

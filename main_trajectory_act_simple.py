@@ -19,6 +19,7 @@ from engine_act_simple import BaseTrainTester
 from utils.common_utils import (
     count_parameters
 )
+from pathlib import Path
 #
 # from datasets.calvin_dataset import transfer
 # from planer_utils import input_processing_real_batch
@@ -88,39 +89,51 @@ class TrainTester(BaseTrainTester):
     def get_criterion():
         return TrajectoryCriterion()
 
-    def train_one_step(self, model, criterion, optimizer, step_id, sample, embedding, lmcliploss=None, act_pred=None):
+    def train_one_step(self, model, criterion, optimizer, step_id,
+                       sample, embedding, lmcliploss=None, act_pred=None):
         """Run a single training step."""
-        if self.args.keypose_only:
-            sample["trajectory"] = sample["trajectory"][:, [-1]]
-            sample["trajectory_mask"] = sample["trajectory_mask"][:, [-1]]
-        else:
-            sample["trajectory"] = sample["trajectory"][:, 1:]
-            sample["trajectory_mask"] = sample["trajectory_mask"][:, 1:]
+        # if self.args.keypose_only:
+        #     sample["trajectory"] = sample["trajectory"][:, [-1]]
+        #     sample["trajectory_mask"] = sample["trajectory_mask"][:, [-1]]
+        # else:
+        #     sample["trajectory"] = sample["trajectory"][:, 1:]
+        #     sample["trajectory_mask"] = sample["trajectory_mask"][:, 1:]
 
         # Forward pass
-        curr_gripper = (
-            sample["curr_gripper"] if self.args.num_history < 1
-            else sample["curr_gripper_history"][:, -self.args.num_history:]
-        )
+        # curr_gripper = (
+        #     sample["curr_gripper"] if self.args.num_history < 1
+        #     else sample["curr_gripper_history"][:, -self.args.num_history:]
+        # )
         aux_loss = 0
         if (step_id + 1) < self.args.train_iters:
+            # out = model(
+            #     sample["trajectory"],
+            #     sample["trajectory_mask"],
+            #     sample["rgbs"],
+            #     sample["pcds"],
+            #     embedding,
+            #     curr_gripper
+            # )
+            speed = sample['speed'].to(dtype=torch.float32).view(-1, 1) / 12.
+            target_point = sample['target_point'].to(dtype=torch.float32)
+            command = sample['target_command']
+            state = torch.cat([speed, target_point, command], 1)
+
             out = model(
-                sample["trajectory"],
-                sample["trajectory_mask"],
-                sample["rgbs"],
-                sample["pcds"],
-                embedding,
-                curr_gripper
+                gt = sample,
+                img = sample["front_img"],
+                state=state,
+                target_point = target_point,
+                embedding=embedding
             )
         else:
             out, aux_loss = model(
-                sample["trajectory"],
-                sample["trajectory_mask"],
-                sample["rgbs"],
-                sample["pcds"],
-                embedding,
-                curr_gripper,
-                act_pred
+                gt = sample,
+                img = sample["front_img"],
+                state=state,
+                target_point=target_point,
+                embedding=embedding,
+                act_pred=act_pred
             )
         if (step_id + 1) < self.args.train_iters:
             model.requires_grad_(False)
@@ -141,10 +154,10 @@ class TrainTester(BaseTrainTester):
             optimizer.zero_grad()
 
         # Log
-        if dist.get_rank() == 0 and (step_id + 1) % (0.01 * self.args.val_freq) == 0:
-            self.writer.add_scalar("lr", self.args.lr, step_id)
-            self.writer.add_scalar("action_loss", aux_loss, step_id)
-            self.writer.add_scalar("train-loss/noise_mse", loss, step_id)
+        # if dist.get_rank() == 0 and (step_id + 1) % (0.01 * self.args.val_freq) == 0:
+        #     self.writer.add_scalar("lr", self.args.lr, step_id)
+        #     self.writer.add_scalar("action_loss", aux_loss, step_id)
+        #     self.writer.add_scalar("train-loss/noise_mse", loss, step_id)
 
 
     @torch.no_grad()
@@ -366,14 +379,14 @@ class TrajectoryCriterion:
     def __init__(self):
         pass
 
-    def compute_loss(self, pred, speed_weight, gt=None, mask=None, is_loss=True):
+    def compute_loss(self, pred, gt=None, is_loss=True):
         if not is_loss:
-            assert gt is not None and mask is not None
-            return self.compute_metrics(pred, gt, mask, speed_weight)['action_loss']
+            assert gt is not None
+            return self.compute_metrics(pred, gt)
         return pred
 
     @staticmethod
-    def compute_metrics(pred, gt, mask,pred_len, speed_weight):
+    def compute_metrics(pred, gt, pred_len=4, speed_weight=0.05,features_weight=0.05,value_weight = 0.001 ):
         # pred/gt are (B, L, 2), mask (B, L)
         speed = gt['speed'].to(dtype=torch.float32).view(-1, 1) / 12.
         dist_sup = Beta(gt['action_mu'], gt['action_sigma'])
@@ -381,21 +394,25 @@ class TrajectoryCriterion:
         kl_div = torch.distributions.kl_divergence(dist_sup, dist_pred)
         action_loss = torch.mean(kl_div[:, 0]) * 0.5 + torch.mean(kl_div[:, 1]) * 0.5
         speed_loss = F.l1_loss(pred['pred_speed'], speed) * speed_weight
-        # value_loss = (F.mse_loss(pred['pred_value_traj'], value) + F.mse_loss(pred['pred_value_ctrl'],
-        #                                                                       value)) * self.config.value_weight
-        # feature_loss = (F.mse_loss(pred['pred_features_traj'], feature) + F.mse_loss(pred['pred_features_ctrl'],
-        #
-        #                                                                              feature)) * self.config.features_weight
+
+        value = gt['value'].view(-1, 1)
+        value_loss = (F.mse_loss(pred['pred_value_traj'], value) + F.mse_loss(pred['pred_value_ctrl'],
+                                                                              value)) * value_weight
+        feature = gt['feature']
+        feature_loss = (F.mse_loss(pred['pred_features_traj'], feature) + F.mse_loss(pred['pred_features_ctrl'],
+
+                                                                                     feature)) * features_weight
         gt_waypoints = gt['waypoints']
+        future_feature_loss = 0
         future_action_loss = 0
         for i in range(pred_len):
             dist_sup = Beta(gt['future_action_mu'][i], gt['future_action_sigma'][i])
             dist_pred = Beta(pred['future_mu'][i], pred['future_sigma'][i])
             kl_div = torch.distributions.kl_divergence(dist_sup, dist_pred)
             future_action_loss += torch.mean(kl_div[:, 0]) * 0.5 + torch.mean(kl_div[:, 1]) * 0.5
-            # future_feature_loss += F.mse_loss(pred['future_feature'][i],
-            #                                   batch['future_feature'][i]) * self.config.features_weight
-        # future_feature_loss /= self.config.pred_len
+            future_feature_loss += F.mse_loss(pred['future_feature'][i],
+                                              gt['future_feature'][i]) * features_weight
+        future_feature_loss /= pred_len
         future_action_loss /= pred_len
         wp_loss = F.l1_loss(pred['pred_wp'], gt_waypoints, reduction='none').mean()
 
@@ -407,6 +424,7 @@ class TrajectoryCriterion:
             'future_action_loss': future_action_loss.item(),
 
         }
+        # loss = action_loss + speed_loss + value_loss + feature_loss + wp_loss+ future_feature_loss + future_action_loss
         return loss
 #
 #
@@ -467,22 +485,34 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
     parser.add_argument('--num_workers', type=int, default=8, help='number of workers')
     parser.add_argument('--llava_dir', type=str,
-                        default="/home/lin/proj/pretrained/LLaVA-Lightning-7B-delta-v1-1", help='llava')
+                        default="/Users/lin/Desktop/pretrain_model/LLaVA-Lightning-7B-delta-v1-1", help='llava')
     parser.add_argument('--vision_tower', type=str,
-                        default="/home/lin/proj/pretrained/clip-vit-large-patch14", help='vision tower')
+                        default="/Users/lin/Desktop/pretrain_model/clip-vit-large-patch14", help='vision tower')
     parser.add_argument('--sample_rate', type=int, default=1, help='sample rate')
     parser.add_argument('--stage2_train_iters', type=int, default=200_000, help='stage2_train_iters')
+    parser.add_argument('--pred_len', type=int, default=4, help='Length of predicted trajectory.')
+    parser.add_argument('--train_iters', type=int, default=1000, help='iteration number of first training.')
+    parser.add_argument('--base_log_dir', type=str,
+                        default=Path(__file__).parent / "train_logs", help='save log')
+    parser.add_argument('--exp_log_dir', type=str,
+                        default="exp", help='save log')
+    parser.add_argument('--run_log_dir', type=str,
+                        default="run", help='save log')
+    parser.add_argument('--accumulate_grad_batches', type=int, default=4, help=' ')
+    parser.add_argument('--val_freq', type=int, default=500, help=' ')
 
 
 
 
     args = parser.parse_args()
-    args.logdir = os.path.join(args.logdir, args.id)
+    log_dir = args.base_log_dir / args.exp_log_dir / args.run_log_dir
+    args.log_dir = log_dir
+    # args.logdir = os.path.join(args.logdir, args.id)
     print("Arguments:")
     print(args)
     print("-" * 100)
 
-    print("Logging:", args.logdir)
+    print("Logging:", args.log_dir)
     print(
         "Available devices (CUDA_VISIBLE_DEVICES):",
         os.environ.get("CUDA_VISIBLE_DEVICES")

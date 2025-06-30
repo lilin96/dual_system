@@ -11,13 +11,20 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 import torch.distributed as dist
+from torch.utils.tensorboard import SummaryWriter
+
 from torch.nn.parallel import DistributedDataParallel
 from tqdm import trange
+from planer_utils import Model_init, input_processing_real_batch, input_processing_carla_batch
 
-from planer_utils import Model_init,input_processing_real_batch
 
 # from peft import LoraConfig, get_peft_model
 
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2 ** 32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+    np.random.seed(np.random.get_state()[1][0] + worker_id)
 
 class linearlayer(nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -41,6 +48,9 @@ class BaseTrainTester:
         #     path = args.log_dir
         #     path.mkdir(exist_ok=True, parents=True)
         #     self.writer = SummaryWriter(log_dir=path)
+        path = args.log_dir
+        path.mkdir(exist_ok=True, parents=True)
+        self.writer = SummaryWriter(log_dir=path)
     
     @staticmethod
     def get_datasets():
@@ -51,11 +61,7 @@ class BaseTrainTester:
 
     def get_loaders(self, collate_fn=default_collate):
         """Initialize data loaders."""
-        def seed_worker(worker_id):
-            worker_seed = torch.initial_seed() % 2**32
-            np.random.seed(worker_seed)
-            random.seed(worker_seed)
-            np.random.seed(np.random.get_state()[1][0] + worker_id)
+
         # Datasets
         train_dataset, test_dataset = self.get_datasets()
         # Samplers and loaders
@@ -226,6 +232,8 @@ class BaseTrainTester:
         )
         if torch.cuda.is_available():
             LCB_model = LCB_model.cuda()
+        else:
+            LCB_model = LCB_model.to(torch.device("mps"))
         # LCB_model = LCB_model.to(device)
         # LCB_model = DistributedDataParallel(
         #     LCB_model, device_ids=[self.args.local_rank],
@@ -243,36 +251,67 @@ class BaseTrainTester:
                 iter_loader = iter(train_loader)
                 sample = next(iter_loader)
             # data preparation
-            conversations, questions = transfer(sample['instr_text'])
+            commands = sample['target_command']
+
+            command_map = {
+                0: 'LEFT',
+                1: 'RIGHT',
+                2: 'STRAIGHT',
+                3: 'LANE FOLLOW',
+                4: 'CHANGE LANE LEFT',
+                5: 'CHANGE LANE RIGHT'
+            }
+
+            commands = [command_map[vec.argmax().item()]+ " " + "<image>" for vec in commands]
+
+            # conversations, questions = transfer(sample['instr_text'])
             #fisrt stage================LLM===================
             start_idx = []
             initial_id=0
-            for i in range(len(conversations)):
-                if sample['curr_gripper_history'][i][0][0]==sample['curr_gripper_history'][i][2][0]:
+            for i in range(len(commands)):
+                if sample['waypoints'][i][0][0] == sample['waypoints'][i][3][0]:
                     initial_id = i
+            #     if sample['curr_gripper_history'][i][0][0]==sample['curr_gripper_history'][i][2][0]:
+            #         initial_id = i
                 if (i-initial_id) % sample_rate == 0:
                     start_idx.append(i)
-            image_rgb = sample['rgbs'][:, 0]
-            image_select_rows = image_rgb[start_idx]
-            conv_select = [conversations[i] for i in start_idx]
-            image_clip, image, input_ids, attention_masks, targets = input_processing_real_batch(image_tensor=image_select_rows, conv_list=conv_select, clip_image_processor=clip_image_processor, tokenizer=tokenizer)
+            # image_rgb = sample['rgbs'][:, 0]
+            # image_select_rows = image_rgb[start_idx]
+            # conv_select = [conversations[i] for i in start_idx]
+
+            image_select_rows = sample['front_img']
+            image_clip, image, input_ids, attention_masks, targets = input_processing_carla_batch(image_tensor=image_select_rows,
+                                                                                                  command_list=commands,
+                                                                                                  clip_image_processor=clip_image_processor,
+                                                                                                  tokenizer=tokenizer)
             
-            pred_actions_embedding, ce_loss, act_pred = LCB_model.module.model_forward(
-                images=image,  
-                images_clip=image_clip,  
+            # pred_actions_embedding, ce_loss, act_pred = LCB_model.module.model_forward(
+            #     images=image,
+            #     images_clip=image_clip,
+            #     input_ids=input_ids,
+            #     labels=targets,
+            #     attention_masks=attention_masks,
+            #     tokenizer=tokenizer,
+            # )
+            pred_actions_embedding, ce_loss, act_pred = LCB_model.model_forward(
+                images=image,
+                images_clip=image_clip,
                 input_ids=input_ids,
                 labels=targets,
+                target_point=sample['target_point'],
                 attention_masks=attention_masks,
                 tokenizer=tokenizer,
+                pred_len = self.args.pred_len,
+
             )
  
             
             # data sampling for asychronous traning
             #revise 0305
-            total_action_embedding = torch.zeros(len(conversations), pred_actions_embedding.shape[1])#batch, 512
+            total_action_embedding = torch.zeros(len(commands), pred_actions_embedding.shape[1])#batch, 512
             # print(total_action_embedding.shape)
             # total_action_embedding = torch.zeros_like(pred_actions_embedding,device=pred_actions_embedding.device)
-            for i in range(len(conversations)):
+            for i in range(len(commands)):
                 if i in start_idx:
                     total_action_embedding[i] = pred_actions_embedding[start_idx.index(i)]
                 else:
@@ -283,7 +322,8 @@ class BaseTrainTester:
             total_action_embedding = total_action_embedding.unsqueeze(1)
     
             #second stage================3dda===================
-            self.train_one_step(model, criterion, optimizer, step_id, sample, total_action_embedding, act_pred=[act_pred,start_idx])
+            self.train_one_step(model, criterion, optimizer, step_id, sample,
+                                total_action_embedding, act_pred=[act_pred,start_idx])
 
             if (step_id + 1) % self.args.accumulate_grad_batches == 0:
                 LLM_optimizer.step()
@@ -306,7 +346,7 @@ class BaseTrainTester:
 
         return model
 
-    def train_one_step(self, model, criterion, optimizer, step_id, sample):
+    def train_one_step(self, model, criterion, optimizer, step_id, sample, embedding, lmcliploss=None, act_pred=None):
         """Run a single training step."""
         pass
 

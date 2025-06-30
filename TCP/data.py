@@ -155,6 +155,8 @@ class CARLA_Data(Dataset):
 		data['value'] = self.value[index]
 		command = self.command[index]
 
+
+
 		# VOID = -1
 		# LEFT = 1
 		# RIGHT = 2
@@ -162,13 +164,23 @@ class CARLA_Data(Dataset):
 		# LANEFOLLOW = 4
 		# CHANGELANELEFT = 5
 		# CHANGELANERIGHT = 6
+		# command_map = {
+		# 	0: 'LEFT',
+		# 	1: 'RIGHT',
+		# 	2: 'STRAIGHT',
+		# 	3: 'LANE FOLLOW',
+		# 	4: 'CHANGE LANE LEFT',
+		# 	5: 'CHANGE LANE RIGHT'
+		# }
 		if command < 0:
 			command = 4
 		command -= 1
 		assert command in [0, 1, 2, 3, 4, 5]
+		# assert command in command_map
 		cmd_one_hot = [0] * 6
 		cmd_one_hot[command] = 1
-		data['target_command'] = torch.tensor(cmd_one_hot)		
+		data['target_command'] = torch.tensor(cmd_one_hot)
+		# data['target_command'] = command_map[command] + " " + "<image>"
 
 		self._batch_read_number += 1
 		return data
