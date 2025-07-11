@@ -49,3 +49,7 @@ setproctitle
 shapely
 shortuuid
 lmdb
+
+transformers==4.31
+peft==0.13.2
+sentencepiece

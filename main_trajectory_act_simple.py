@@ -114,6 +114,7 @@ class TrainTester(BaseTrainTester):
             #     embedding,
             #     curr_gripper
             # )
+            # sample = {k: v.to('cuda') if torch.is_tensor(v) else v for k, v in sample.items()}
             speed = sample['speed'].to(dtype=torch.float32).view(-1, 1) / 12.
             target_point = sample['target_point'].to(dtype=torch.float32)
             command = sample['target_command']
@@ -124,7 +125,7 @@ class TrainTester(BaseTrainTester):
                 img = sample["front_img"],
                 state=state,
                 target_point = target_point,
-                embedding=embedding
+                embedding=embedding.cuda()
             )
         else:
             out, aux_loss = model(
@@ -479,15 +480,15 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=60, help='Number of train epochs.')
     parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate.')
     parser.add_argument('--val_every', type=int, default=3, help='Validation frequency (epochs).')
-    parser.add_argument('--batch_size', type=int, default=5, help='Batch size')
+    parser.add_argument('--batch_size', type=int, default=2, help='Batch size')
     parser.add_argument('--logdir', type=str, default='log', help='Directory to log data to.')
     parser.add_argument('--gpus', type=int, default=1, help='number of gpus')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
     parser.add_argument('--num_workers', type=int, default=8, help='number of workers')
     parser.add_argument('--llava_dir', type=str,
-                        default="/Users/lin/Desktop/pretrain_model/LLaVA-Lightning-7B-delta-v1-1", help='llava')
+                        default="/media/lin/New/pretrained/LLaVA-Lightning-7B-delta-v1-1", help='llava')
     parser.add_argument('--vision_tower', type=str,
-                        default="/Users/lin/Desktop/pretrain_model/clip-vit-large-patch14", help='vision tower')
+                        default="/media/lin/New/pretrained/clip-vit-large-patch14", help='vision tower')
     parser.add_argument('--sample_rate', type=int, default=1, help='sample rate')
     parser.add_argument('--stage2_train_iters', type=int, default=200_000, help='stage2_train_iters')
     parser.add_argument('--pred_len', type=int, default=4, help='Length of predicted trajectory.')
@@ -518,7 +519,7 @@ if __name__ == '__main__':
         os.environ.get("CUDA_VISIBLE_DEVICES")
     )
     print("Device count", torch.cuda.device_count())
-    # args.local_rank = int(os.environ["LOCAL_RANK"])
+    args.local_rank = int(os.environ.get("LOCAL_RANK", 0))
 
     # Seeds
     torch.manual_seed(args.seed)

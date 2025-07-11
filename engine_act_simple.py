@@ -171,6 +171,18 @@ class BaseTrainTester:
         aux_loss = self.batch_clip_loss(z_act_batch, g_txt_batch, processor, device, model, linear_layer)
         return aux_loss.item()
 
+    def to_cuda(self, sample, device):
+        for k, v in sample.items():
+            if isinstance(v, torch.Tensor):
+                sample[k] = v.to(device, non_blocking=True)
+            elif isinstance(v, list):
+                sample[k] = [vv.to(device) for vv in v]
+            elif isinstance(v, dict):
+                sample[k] = {kk: vv.to(device) for kk, vv in v.items()}
+            elif isinstance(v, tuple):
+                sample[k] = tuple(vv.to(device) for vv in v)
+        return sample
+
     def main(self, collate_fn=default_collate):
         """Run main training/testing pipeline."""
         # Get loaders
@@ -250,6 +262,9 @@ class BaseTrainTester:
             except StopIteration:
                 iter_loader = iter(train_loader)
                 sample = next(iter_loader)
+
+            sample = self.to_cuda(sample, device)
+
             # data preparation
             commands = sample['target_command']
 

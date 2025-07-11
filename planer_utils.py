@@ -96,7 +96,7 @@ def Model_init(vision_tower, llava_dir, torch_dtype):
         "use_mm_start_end": True,
     }
     
-    model = LISAForCausalLM.from_pretrained(llava_dir, torch_dtype=torch_dtype, low_cpu_mem_usage=True, **model_args).to(torch.device("mps"))
+    model = LISAForCausalLM.from_pretrained(llava_dir, torch_dtype=torch_dtype, low_cpu_mem_usage=True, **model_args).cuda()
     model.config.eos_token_id = tokenizer.eos_token_id
     model.config.bos_token_id = tokenizer.bos_token_id
     model.config.pad_token_id = tokenizer.pad_token_id
@@ -106,8 +106,8 @@ def Model_init(vision_tower, llava_dir, torch_dtype):
 
     model.get_model().initialize_vision_modules(model.get_model().config)
     vision_tower = model.get_model().get_vision_tower()
-    # vision_tower.to(dtype=torch_dtype, device=0)
-    vision_tower.to(dtype=torch_dtype, device=torch.device("mps"))
+    vision_tower.to(dtype=torch_dtype, device=0)
+    # vision_tower.to(dtype=torch_dtype, device=torch.device("mps"))
     model.get_model().initialize_lisa_modules(model.get_model().config)
     model.requires_grad_(False)
     for n, p in model.named_parameters():
@@ -353,7 +353,7 @@ def input_processing_carla_batch(image_tensor, command_list, clip_image_processo
     image_clip_batch = clip_image_processor.preprocess(pil_images, return_tensors="pt")["pixel_values"]
     if torch.cuda.is_available():
         image_clip_batch = image_clip_batch.to(torch.bfloat16).cuda() # [batch, channels, height, width]
-        image_batch = preprocess(image_tensor.contiguous()).to(torch.bfloat16).cuda()  # [batch, 3, 224, 224]
+        image_batch = preprocess(image_tensor.cpu().contiguous()).to(torch.bfloat16).cuda()  # [batch, 3, 224, 224]
     else:
         image_clip_batch = image_clip_batch.to(torch.bfloat16).to(torch.device("mps"))
         image_batch = preprocess(image_tensor.contiguous()).to(torch.bfloat16).to(torch.device("mps"))
@@ -381,9 +381,9 @@ def input_processing_carla_batch(image_tensor, command_list, clip_image_processo
         input_ids = torch.nn.utils.rnn.pad_sequence(short_input_ids, batch_first=True,
                                                     padding_value=tokenizer.pad_token_id).to(torch.device("mps"))
 
-    attention_masks = input_ids.ne(tokenizer.pad_token_id).to(torch.device("mps"))
+    attention_masks = input_ids.ne(tokenizer.pad_token_id)
 
-    targets = input_ids.clone().to(torch.device("mps"))
+    targets = input_ids.clone()
     targets[:, :] = IGNORE_INDEX
 
     truncate_len = tokenizer.model_max_length - 255

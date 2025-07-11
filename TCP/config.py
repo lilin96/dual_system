@@ -7,7 +7,7 @@ class GlobalConfig:
 	pred_len = 4 # future waypoints predicted
 
 	# data root
-	root_dir_all = "/Users/lin/Desktop/dataset/tcp_carla_data"
+	root_dir_all = "/media/lin/New/dataset/tcp_carla_data"
 
 	# train_towns = ['town01', 'town03', 'town04',  'town06', ]
 	train_towns = ['town01']

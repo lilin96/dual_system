@@ -119,7 +119,7 @@ class LISAForCausalLM(LlavaLlamaForCausalLM):
                         dtype=z.dtype).type_as(z)
         for _ in range(pred_len):
             x_in = torch.cat([x,
-                              target_point.to(dtype=torch.float32).to(torch.device("mps"))], dim=1)
+                              target_point.to(dtype=torch.float32).cuda()], dim=1)
             z = self.model.decoder_traj(x_in, z)
             dx = self.model.pred_traj(z)
             x = dx + x
