@@ -486,9 +486,9 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
     parser.add_argument('--num_workers', type=int, default=8, help='number of workers')
     parser.add_argument('--llava_dir', type=str,
-                        default="/media/lin/New/pretrained/LLaVA-Lightning-7B-delta-v1-1", help='llava')
+                        default="/home/users/ntu/keqichen/scratch/lilin_projects/pretrained/LLaVA-Lightning-7B-delta-v1-1", help='llava')
     parser.add_argument('--vision_tower', type=str,
-                        default="/media/lin/New/pretrained/clip-vit-large-patch14", help='vision tower')
+                        default="/home/users/ntu/keqichen/scratch/lilin_projects/pretrained/clip-vit-large-patch14", help='vision tower')
     parser.add_argument('--sample_rate', type=int, default=1, help='sample rate')
     parser.add_argument('--stage2_train_iters', type=int, default=200_000, help='stage2_train_iters')
     parser.add_argument('--pred_len', type=int, default=4, help='Length of predicted trajectory.')
@@ -527,11 +527,11 @@ if __name__ == '__main__':
     random.seed(args.seed)
 
     # DDP initialization
-    # torch.cuda.set_device(args.local_rank)
-    # torch.distributed.init_process_group(backend='nccl', init_method='env://')
-    # torch.backends.cudnn.enabled = True
-    # torch.backends.cudnn.benchmark = True
-    # torch.backends.cudnn.deterministic = True
+    torch.cuda.set_device(args.local_rank)
+    torch.distributed.init_process_group(backend='nccl', init_method='env://')
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = True
 
     # Run
     train_tester = TrainTester(args)
