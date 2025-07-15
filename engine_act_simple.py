@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
+from collections import OrderedDict
 
 from torch.nn.parallel import DistributedDataParallel
 from tqdm import trange
@@ -207,11 +208,22 @@ class BaseTrainTester:
 
         # Check for a checkpoint
         start_iter, best_loss = 0, None
-        # if self.args.training_checkpoint:
-        #     assert os.path.isfile(self.args.training_checkpoint)
-        #     start_iter, best_loss = self.load_checkpoint(model, optimizer)
+        if self.args.training_checkpoint:
+            # assert os.path.isfile(self.args.training_checkpoint)
+            start_iter, best_loss = self.load_checkpoint(model, optimizer)
 
-
+        # Eval only
+        if bool(self.args.eval_only):
+            print("Test evaluation.......")
+            model.eval()
+            new_loss = self.evaluate_nsteps(
+                model, criterion, test_loader, step_id=-1,
+                val_iters=max(
+                    5,
+                    int(4 * len(self.args.tasks)/self.args.batch_size_val)
+                )
+            )
+            return model
         
         #===============LLM initialization（CLIP/tokenizer）==============
         llava_dir = self.args.llava_dir
@@ -222,32 +234,7 @@ class BaseTrainTester:
         clip_image_processor, tokenizer, LCB_model = Model_init(vision_tower, llava_dir, torch_dtype)
         LCB_model.resize_token_embeddings(len(tokenizer))
 
-        # Eval only
-        if bool(self.args.eval_only):
-            print("Test evaluation.......")
-            if torch.cuda.is_available():
-                LCB_model = LCB_model.cuda()
-            else:
-                LCB_model = LCB_model.to(torch.device("mps"))
-            LCB_model = LCB_model.to(device)
-            LCB_model = DistributedDataParallel(
-                LCB_model, device_ids=[self.args.local_rank],
-                broadcast_buffers=False, find_unused_parameters=True
-            )
 
-            model.eval()
-            new_loss = self.evaluate_nsteps(
-                model, criterion, test_loader,
-                LCB_model.train(), clip_image_processor,tokenizer,
-                step_id=-1,
-                val_iters=max(
-                    5,
-                    5
-                ),
-
-            )
-            return model
-        
         # Get LLM optimizer
         import torch.optim as optim
         
@@ -261,7 +248,7 @@ class BaseTrainTester:
             LCB_model = LCB_model.cuda()
         else:
             LCB_model = LCB_model.to(torch.device("mps"))
-        LCB_model = LCB_model.to(device)
+        # LCB_model = LCB_model.to(device)
         LCB_model = DistributedDataParallel(
             LCB_model, device_ids=[self.args.local_rank],
             broadcast_buffers=False, find_unused_parameters=True
@@ -323,18 +310,6 @@ class BaseTrainTester:
             #     attention_masks=attention_masks,
             #     tokenizer=tokenizer,
             # )
-            # pred_actions_embedding, ce_loss, act_pred = LCB_model.model_forward(
-            #     images=image,
-            #     images_clip=image_clip,
-            #     input_ids=input_ids,
-            #     labels=targets,
-            #     target_point=sample['target_point'],
-            #     attention_masks=attention_masks,
-            #     tokenizer=tokenizer,
-            #     pred_len = self.args.pred_len,
-            #
-            # )
-
             pred_actions_embedding, ce_loss, act_pred = LCB_model.module.model_forward(
                 images=image,
                 images_clip=image_clip,
@@ -343,7 +318,7 @@ class BaseTrainTester:
                 target_point=sample['target_point'],
                 attention_masks=attention_masks,
                 tokenizer=tokenizer,
-                pred_len=self.args.pred_len,
+                pred_len = self.args.pred_len,
 
             )
 
@@ -376,7 +351,7 @@ class BaseTrainTester:
             if (step_id + 1) % self.args.val_freq == 0:
                 if dist.get_rank() == 0:  # save model
                     best_loss = self.save_checkpoint(
-                        model, optimizer, step_id, best_loss
+                        model, optimizer, step_id, None, best_loss
                     )
                     save_path = self.args.log_dir / '{:07d}'.format(step_id)
                     os.makedirs(save_path, exist_ok=True)
@@ -397,25 +372,54 @@ class BaseTrainTester:
         """Run a given number of evaluation steps."""
         return None
 
+    # def load_checkpoint(self, model, optimizer):
+    #     """Load from checkpoint."""
+    #     print("=> loading checkpoint '{}'".format(self.args.training_checkpoint))
+
+    #     model_dict = torch.load(self.args.training_checkpoint, map_location="cpu")
+    #     model.load_state_dict(model_dict["weight"])
+    #     if 'optimizer' in model_dict:
+    #         optimizer.load_state_dict(model_dict["optimizer"])
+    #         for p in range(len(optimizer.param_groups)):
+    #             optimizer.param_groups[p]['lr'] = self.args.lr
+    #     start_iter = model_dict.get("iter", 0)
+    #     best_loss = model_dict.get("best_loss", None)
+
+    #     print("=> loaded successfully '{}' (step {})".format(
+    #         self.args.training_checkpoint, model_dict.get("iter", 0)
+    #     ))
+    #     del model_dict
+    #     torch.cuda.empty_cache()
+    #     return start_iter, best_loss
+
     def load_checkpoint(self, model, optimizer):
         """Load from checkpoint."""
         print("=> loading checkpoint '{}'".format(self.args.training_checkpoint))
+        ckpt = torch.load(self.args.training_checkpoint, map_location="cuda")
+        ckpt = ckpt["state_dict"]
 
-        model_dict = torch.load(self.args.training_checkpoint, map_location="cpu")
-        model.load_state_dict(model_dict["weight"])
-        if 'optimizer' in model_dict:
-            optimizer.load_state_dict(model_dict["optimizer"])
+        new_state_dict = OrderedDict()
+        for key, value in ckpt.items():
+            new_key = key.replace("model.", "")
+            new_state_dict[new_key] = value
+        model.load_state_dict(new_state_dict, strict=False)
+
+        if 'optimizer' in new_state_dict:
+            optimizer.load_state_dict(new_state_dict["optimizer"])
             for p in range(len(optimizer.param_groups)):
                 optimizer.param_groups[p]['lr'] = self.args.lr
-        start_iter = model_dict.get("iter", 0)
-        best_loss = model_dict.get("best_loss", None)
+        start_iter = new_state_dict.get("iter", 0)
+        best_loss = new_state_dict.get("best_loss", None)
 
         print("=> loaded successfully '{}' (step {})".format(
-            self.args.training_checkpoint, model_dict.get("iter", 0)
+            self.args.training_checkpoint, new_state_dict.get("iter", 0)
         ))
-        del model_dict
+        del new_state_dict
         torch.cuda.empty_cache()
         return start_iter, best_loss
+
+
+
 
     def save_checkpoint(self, model, optimizer, step_id, new_loss, best_loss):
         """Save checkpoint if requested."""

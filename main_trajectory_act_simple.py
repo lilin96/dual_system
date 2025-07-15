@@ -128,6 +128,8 @@ class TrainTester(BaseTrainTester):
                 embedding=embedding.cuda()
             )
         else:
+            # print(act_pred)
+            # act_pred=[act.cuda() for act in act_pred]
             out, aux_loss = model(
                 gt = sample,
                 img = sample["front_img"],
@@ -521,11 +523,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--id', type=str, default='TCP', help='Unique experiment identifier.')
-    parser.add_argument('--epochs', type=int, default=60, help='Number of train epochs.')
+    # parser.add_argument('--epochs', type=int, default=60, help='Number of train epochs.')
     parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate.')
     parser.add_argument('--val_every', type=int, default=3, help='Validation frequency (epochs).')
     parser.add_argument('--batch_size', type=int, default=1, help='Batch size')
     parser.add_argument('--logdir', type=str, default='log', help='Directory to log data to.')
+    parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
+    # parser.add_argument('--logdir', type=str, default='log', help='Directory to log data to.')
     parser.add_argument('--gpus', type=int, default=1, help='number of gpus')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
     parser.add_argument('--num_workers', type=int, default=8, help='number of workers')
@@ -534,9 +538,9 @@ if __name__ == '__main__':
     parser.add_argument('--vision_tower', type=str,
                         default="/media/lin/New/pretrained/clip-vit-large-patch14", help='vision tower')
     parser.add_argument('--sample_rate', type=int, default=1, help='sample rate')
-    parser.add_argument('--stage2_train_iters', type=int, default=200_000, help='stage2_train_iters')
+    parser.add_argument('--stage2_train_iters', type=int, default=10_000, help='stage2_train_iters')
     parser.add_argument('--pred_len', type=int, default=4, help='Length of predicted trajectory.')
-    parser.add_argument('--train_iters', type=int, default=1000, help='iteration number of first training.')
+    parser.add_argument('--train_iters', type=int, default=10_000, help='iteration number of first training.')
     parser.add_argument('--base_log_dir', type=str,
                         default=Path(__file__).parent / "train_logs", help='save log')
     parser.add_argument('--exp_log_dir', type=str,
@@ -548,6 +552,8 @@ if __name__ == '__main__':
     parser.add_argument('--eval_only', type=int, default=0, help=' ')
     parser.add_argument('--val_iters', type=int, default=1, help='iteration number of first training.')
 
+    parser.add_argument('--training_checkpoint', type=str,
+                        default="/home/users/ntu/yongxias/scratch/lilin_projects/pretrained/TCP/tcp_b2d.ckpt", help='pretrained checkpoint')
 
 
 

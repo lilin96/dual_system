@@ -1,0 +1,15 @@
+run_train.sh
+command.sh
+
+__pycache__/
+TCP/__pycache__/
+datasets/__pycache__/
+model/__pycache__/
+model/llava/__pycache__/
+model/llava/model/__pycache__/
+model/llava/model/language_model/__pycache__/
+model/llava/model/language_model/mpt/__pycache__/
+model/llava/model/multimodal_encoder/__pycache__/
+utils/__pycache__/
+
+train_logs/
