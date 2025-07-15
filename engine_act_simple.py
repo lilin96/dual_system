@@ -211,19 +211,6 @@ class BaseTrainTester:
         if self.args.training_checkpoint:
             # assert os.path.isfile(self.args.training_checkpoint)
             start_iter, best_loss = self.load_checkpoint(model, optimizer)
-
-        # Eval only
-        if bool(self.args.eval_only):
-            print("Test evaluation.......")
-            model.eval()
-            new_loss = self.evaluate_nsteps(
-                model, criterion, test_loader, step_id=-1,
-                val_iters=max(
-                    5,
-                    int(4 * len(self.args.tasks)/self.args.batch_size_val)
-                )
-            )
-            return model
         
         #===============LLM initialization（CLIP/tokenizer）==============
         llava_dir = self.args.llava_dir
@@ -233,6 +220,32 @@ class BaseTrainTester:
         torch_dtype = torch.bfloat16
         clip_image_processor, tokenizer, LCB_model = Model_init(vision_tower, llava_dir, torch_dtype)
         LCB_model.resize_token_embeddings(len(tokenizer))
+
+        # Eval only
+        if bool(self.args.eval_only):
+            print("Test evaluation.......")
+            if torch.cuda.is_available():
+                LCB_model = LCB_model.cuda()
+            else:
+                LCB_model = LCB_model.to(torch.device("mps"))
+            LCB_model = LCB_model.to(device)
+            LCB_model = DistributedDataParallel(
+                LCB_model, device_ids=[self.args.local_rank],
+                broadcast_buffers=False, find_unused_parameters=True
+            )
+
+            model.eval()
+            new_loss = self.evaluate_nsteps(
+                model, criterion, test_loader,
+                LCB_model.train(), clip_image_processor, tokenizer,
+                step_id=-1,
+                val_iters=max(
+                    5,
+                    5
+                ),
+
+            )
+            return model
 
 
         # Get LLM optimizer

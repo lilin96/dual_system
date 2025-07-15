@@ -528,7 +528,6 @@ if __name__ == '__main__':
     parser.add_argument('--val_every', type=int, default=3, help='Validation frequency (epochs).')
     parser.add_argument('--batch_size', type=int, default=1, help='Batch size')
     parser.add_argument('--logdir', type=str, default='log', help='Directory to log data to.')
-    parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
     # parser.add_argument('--logdir', type=str, default='log', help='Directory to log data to.')
     parser.add_argument('--gpus', type=int, default=1, help='number of gpus')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
@@ -553,7 +552,7 @@ if __name__ == '__main__':
     parser.add_argument('--val_iters', type=int, default=1, help='iteration number of first training.')
 
     parser.add_argument('--training_checkpoint', type=str,
-                        default="/home/users/ntu/yongxias/scratch/lilin_projects/pretrained/TCP/tcp_b2d.ckpt", help='pretrained checkpoint')
+                        default="/media/lin/New/dataset/TCP/tcp_b2d.ckpt", help='pretrained checkpoint')
 
 
 

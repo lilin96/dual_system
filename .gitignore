@@ -1,5 +1,6 @@
 run_train.sh
 command.sh
+TCP/config.py
 
 __pycache__/
 TCP/__pycache__/
