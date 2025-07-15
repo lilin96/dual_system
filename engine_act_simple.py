@@ -18,6 +18,14 @@ from torch.nn.parallel import DistributedDataParallel
 from tqdm import trange
 from planer_utils import Model_init, input_processing_real_batch, input_processing_carla_batch
 
+from transformers import CLIPImageProcessor
+from model.llava.mm_utils import tokenizer_image_token
+from utils.utils import (DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN)
+import time
+from model.llava.constants import (DEFAULT_IMAGE_TOKEN, IGNORE_INDEX)
+import numpy as np
+from peft import LoraConfig, get_peft_model
+from planer import LISAForCausalLM
 
 # from peft import LoraConfig, get_peft_model
 
@@ -211,33 +219,37 @@ class BaseTrainTester:
         if self.args.training_checkpoint:
             # assert os.path.isfile(self.args.training_checkpoint)
             start_iter, best_loss = self.load_checkpoint(model, optimizer)
-        
-        #===============LLM initialization（CLIP/tokenizer）==============
-        llava_dir = self.args.llava_dir
-        vision_tower = self.args.vision_tower
-        sample_rate = self.args.sample_rate
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        torch_dtype = torch.bfloat16
-        clip_image_processor, tokenizer, LCB_model = Model_init(vision_tower, llava_dir, torch_dtype)
-        LCB_model.resize_token_embeddings(len(tokenizer))
 
         # Eval only
         if bool(self.args.eval_only):
             print("Test evaluation.......")
+            llava_dir = self.args.llava_dir
+            token_dir = self.args.token_dir
+            vision_tower = self.args.vision_tower
+            sample_rate = self.args.sample_rate
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            torch_dtype = torch.bfloat16
+
+            clip_image_processor, tokenizer, LCB_model = Model_init(vision_tower, llava_dir, token_dir, torch_dtype)
+
             if torch.cuda.is_available():
                 LCB_model = LCB_model.cuda()
             else:
                 LCB_model = LCB_model.to(torch.device("mps"))
             LCB_model = LCB_model.to(device)
+
             LCB_model = DistributedDataParallel(
                 LCB_model, device_ids=[self.args.local_rank],
                 broadcast_buffers=False, find_unused_parameters=True
             )
+            if self.args.LCB_checkpoint:
+                state_dict = torch.load(self.args.LCB_checkpoint, map_location='cpu')
+                LCB_model.module.load_state_dict(state_dict)
 
             model.eval()
             new_loss = self.evaluate_nsteps(
                 model, criterion, test_loader,
-                LCB_model.train(), clip_image_processor, tokenizer,
+                LCB_model, clip_image_processor, tokenizer,
                 step_id=-1,
                 val_iters=max(
                     5,
@@ -247,6 +259,21 @@ class BaseTrainTester:
             )
             return model
 
+
+
+
+
+        
+        #===============LLM initialization（CLIP/tokenizer）==============
+        llava_dir = self.args.llava_dir
+        token_dir = self.args.token_dir
+        vision_tower = self.args.vision_tower
+        sample_rate = self.args.sample_rate
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        torch_dtype = torch.bfloat16
+
+        clip_image_processor, tokenizer, LCB_model = Model_init(vision_tower, llava_dir, token_dir, torch_dtype)
+        LCB_model.resize_token_embeddings(len(tokenizer))
 
         # Get LLM optimizer
         import torch.optim as optim
@@ -389,7 +416,7 @@ class BaseTrainTester:
     #     """Load from checkpoint."""
     #     print("=> loading checkpoint '{}'".format(self.args.training_checkpoint))
 
-    #     model_dict = torch.load(self.args.training_checkpoint, map_location="cpu")
+    #     model_dict = torch.load(self.args.training_checkpoint, map_location="cuda")
     #     model.load_state_dict(model_dict["weight"])
     #     if 'optimizer' in model_dict:
     #         optimizer.load_state_dict(model_dict["optimizer"])
@@ -408,7 +435,7 @@ class BaseTrainTester:
     def load_checkpoint(self, model, optimizer):
         """Load from checkpoint."""
         print("=> loading checkpoint '{}'".format(self.args.training_checkpoint))
-        ckpt = torch.load(self.args.training_checkpoint, map_location="cuda")
+        ckpt = torch.load(self.args.training_checkpoint, map_location="cpu")
         ckpt = ckpt["state_dict"]
 
         new_state_dict = OrderedDict()

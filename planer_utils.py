@@ -79,10 +79,10 @@ def Add_LoRA(model, tokenizer, lora_r=8, lora_alpha=16, lora_dropout=0.05, lora_
             p.requires_grad = True
     return model
 
-def Model_init(vision_tower, llava_dir, torch_dtype):
+def Model_init(vision_tower, llava_dir, token_dir, torch_dtype):
     
     clip_image_processor = CLIPImageProcessor.from_pretrained(vision_tower)
-    tokenizer = transformers.AutoTokenizer.from_pretrained(llava_dir, cache_dir=None, model_max_length=512, padding_side="right", use_fast=False)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(token_dir, cache_dir=None, model_max_length=512, padding_side="right", use_fast=False)
     tokenizer.pad_token = tokenizer.unk_token
     num_added_tokens = tokenizer.add_tokens("<ACT>")
     seg_token_idx = tokenizer("<ACT>", add_special_tokens=False).input_ids[0]

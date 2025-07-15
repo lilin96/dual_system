@@ -144,9 +144,13 @@ class TCP(nn.Module):
 		outputs = {}
 		outputs['pred_speed'] = self.speed_branch(feature_emb)
 		measurement_feature = self.measurements(state)
+		# print(feature_emb.shape)
+		# print(measurement_feature.shape)
+		# print(embedding.shape)
 		
-		j_traj = self.join_traj(torch.cat([feature_emb, measurement_feature,
-										   embedding.squeeze(0)], 1))
+		j_traj = self.join_traj(torch.cat([feature_emb, measurement_feature,embedding.squeeze(1)],1))
+
+										#    embedding.squeeze(0)], 1))
 		outputs['pred_value_traj'] = self.value_branch_traj(j_traj)
 		outputs['pred_features_traj'] = j_traj
 		z = j_traj

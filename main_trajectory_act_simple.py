@@ -23,7 +23,7 @@ from pathlib import Path
 #
 # from datasets.calvin_dataset import transfer
 # from planer_utils import input_processing_real_batch
-from planer_utils import Model_init, input_processing_real_batch, input_processing_carla_batch
+from planer_utils import input_processing_real_batch, input_processing_carla_batch
 
 # class Arguments(tap.Tap):
 #     id: str = "TCP"  #: Unique experiment identifier.
@@ -472,6 +472,10 @@ class TrajectoryCriterion:
 
         }
         # loss = action_loss + speed_loss + value_loss + feature_loss + wp_loss+ future_feature_loss + future_action_loss
+        print("action_loss:", loss['action_loss'])
+        print("wp_loss:", loss['wp_loss'])
+        print("speed_loss:", loss['speed_loss'])
+
         return loss, loss['action_loss']
 #
 #
@@ -524,18 +528,20 @@ if __name__ == '__main__':
 
     parser.add_argument('--id', type=str, default='TCP', help='Unique experiment identifier.')
     # parser.add_argument('--epochs', type=int, default=60, help='Number of train epochs.')
-    parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate.')
+    parser.add_argument('--lr', type=float, default=0.0003, help='Learning rate.')
     parser.add_argument('--val_every', type=int, default=3, help='Validation frequency (epochs).')
-    parser.add_argument('--batch_size', type=int, default=1, help='Batch size')
+    parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
     parser.add_argument('--logdir', type=str, default='log', help='Directory to log data to.')
     # parser.add_argument('--logdir', type=str, default='log', help='Directory to log data to.')
     parser.add_argument('--gpus', type=int, default=1, help='number of gpus')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
     parser.add_argument('--num_workers', type=int, default=8, help='number of workers')
     parser.add_argument('--llava_dir', type=str,
-                        default="/media/lin/New/pretrained/LLaVA-Lightning-7B-delta-v1-1", help='llava')
+                        default='/home/users/ntu/yongxias/scratch/lilin_projects/dual_system/train_logs/exp/run/0009999', help='llava')
+    parser.add_argument('--token_dir', type=str,
+                        default='/home/users/ntu/yongxias/scratch/lilin_projects/pretrained/LLaVA-Lightning-7B-delta-v1-1', help='token')
     parser.add_argument('--vision_tower', type=str,
-                        default="/media/lin/New/pretrained/clip-vit-large-patch14", help='vision tower')
+                        default='/home/users/ntu/yongxias/scratch/lilin_projects/pretrained/clip-vit-large-patch14', help='vision tower')
     parser.add_argument('--sample_rate', type=int, default=1, help='sample rate')
     parser.add_argument('--stage2_train_iters', type=int, default=10_000, help='stage2_train_iters')
     parser.add_argument('--pred_len', type=int, default=4, help='Length of predicted trajectory.')
@@ -548,11 +554,13 @@ if __name__ == '__main__':
                         default="run", help='save log')
     parser.add_argument('--accumulate_grad_batches', type=int, default=4, help=' ')
     parser.add_argument('--val_freq', type=int, default=500, help=' ')
-    parser.add_argument('--eval_only', type=int, default=0, help=' ')
+    parser.add_argument('--eval_only', type=int, default=1, help=' ')
     parser.add_argument('--val_iters', type=int, default=1, help='iteration number of first training.')
 
     parser.add_argument('--training_checkpoint', type=str,
-                        default="/media/lin/New/dataset/TCP/tcp_b2d.ckpt", help='pretrained checkpoint')
+                        default='/home/users/ntu/yongxias/scratch/lilin_projects/dual_system/train_logs/exp/run/best.pth', help='pretrained checkpoint')
+    parser.add_argument('--LCB_checkpoint', type=str,
+                        default='/home/users/ntu/yongxias/scratch/lilin_projects/dual_system/train_logs/exp/run/0009999/pytorch_model.bin', help='pretrained checkpoint')
 
 
 
