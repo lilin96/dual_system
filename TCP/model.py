@@ -146,7 +146,7 @@ class TCP(nn.Module):
 		measurement_feature = self.measurements(state)
 		
 		j_traj = self.join_traj(torch.cat([feature_emb, measurement_feature,
-										   embedding.squeeze()], 1))
+										   embedding.squeeze(0)], 1))
 		outputs['pred_value_traj'] = self.value_branch_traj(j_traj)
 		outputs['pred_features_traj'] = j_traj
 		z = j_traj
@@ -206,6 +206,10 @@ class TCP(nn.Module):
 		outputs['future_feature'] = future_feature
 		outputs['future_mu'] = future_mu
 		outputs['future_sigma'] = future_sigma
+
+		if run_inference:
+			output_key = ['pred_wp', 'pred_speed', 'mu_branches', 'sigma_branches']
+			return {k: outputs[k] for k in output_key if k in outputs}
 
 		speed_weight = 0.05
 		features_weight = 0.05

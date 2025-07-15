@@ -23,7 +23,7 @@ from pathlib import Path
 #
 # from datasets.calvin_dataset import transfer
 # from planer_utils import input_processing_real_batch
-
+from planer_utils import Model_init, input_processing_real_batch, input_processing_carla_batch
 
 # class Arguments(tap.Tap):
 #     id: str = "TCP"  #: Unique experiment identifier.
@@ -105,6 +105,10 @@ class TrainTester(BaseTrainTester):
         #     else sample["curr_gripper_history"][:, -self.args.num_history:]
         # )
         aux_loss = 0
+        speed = sample['speed'].to(dtype=torch.float32).view(-1, 1) / 12.
+        target_point = sample['target_point'].to(dtype=torch.float32)
+        command = sample['target_command']
+        state = torch.cat([speed, target_point, command], 1)
         if (step_id + 1) < self.args.train_iters:
             # out = model(
             #     sample["trajectory"],
@@ -115,10 +119,6 @@ class TrainTester(BaseTrainTester):
             #     curr_gripper
             # )
             # sample = {k: v.to('cuda') if torch.is_tensor(v) else v for k, v in sample.items()}
-            speed = sample['speed'].to(dtype=torch.float32).view(-1, 1) / 12.
-            target_point = sample['target_point'].to(dtype=torch.float32)
-            command = sample['target_command']
-            state = torch.cat([speed, target_point, command], 1)
 
             out = model(
                 gt = sample,
@@ -133,7 +133,7 @@ class TrainTester(BaseTrainTester):
                 img = sample["front_img"],
                 state=state,
                 target_point=target_point,
-                embedding=embedding,
+                embedding=embedding.cuda(),
                 act_pred=act_pred
             )
         if (step_id + 1) < self.args.train_iters:
@@ -155,14 +155,15 @@ class TrainTester(BaseTrainTester):
             optimizer.zero_grad()
 
         # Log
-        # if dist.get_rank() == 0 and (step_id + 1) % (0.01 * self.args.val_freq) == 0:
-        #     self.writer.add_scalar("lr", self.args.lr, step_id)
-        #     self.writer.add_scalar("action_loss", aux_loss, step_id)
-        #     self.writer.add_scalar("train-loss/noise_mse", loss, step_id)
+        if dist.get_rank() == 0 and (step_id + 1) % (0.01 * self.args.val_freq) == 0:
+            self.writer.add_scalar("lr", self.args.lr, step_id)
+            self.writer.add_scalar("action_loss", aux_loss, step_id)
+            self.writer.add_scalar("train-loss/noise_mse", loss, step_id)
 
 
     @torch.no_grad()
-    def evaluate_nsteps(self, model, criterion, loader, step_id, val_iters, total_action_embedding,
+    def evaluate_nsteps(self, model, criterion, loader, LCB_model, clip_image_processor,tokenizer,
+                          step_id, val_iters,
                         split='val'):
         """Run a given number of evaluation steps."""
         if self.args.val_iters != -1:
@@ -174,32 +175,81 @@ class TrainTester(BaseTrainTester):
         for i, sample in enumerate(loader):
             if i == val_iters:
                 break
+            commands = sample['target_command']
 
-            if self.args.keypose_only:
-                sample["trajectory"] = sample["trajectory"][:, [-1]]
-                sample["trajectory_mask"] = sample["trajectory_mask"][:, [-1]]
-            else:
-                sample["trajectory"] = sample["trajectory"][:, 1:]
-                sample["trajectory_mask"] = sample["trajectory_mask"][:, 1:]
+            command_map = {
+                0: 'LEFT',
+                1: 'RIGHT',
+                2: 'STRAIGHT',
+                3: 'LANE FOLLOW',
+                4: 'CHANGE LANE LEFT',
+                5: 'CHANGE LANE RIGHT'
+            }
 
-            curr_gripper = (
-                sample["curr_gripper"] if self.args.num_history < 1
-                else sample["curr_gripper_history"][:, -self.args.num_history:]
+            commands = [command_map[vec.argmax().item()] + " " + "<image>" for vec in commands]
+            # fisrt stage================LLM===================
+            start_idx = []
+            initial_id = 0
+            for i in range(len(commands)):
+                if sample['waypoints'][i][0][0] == sample['waypoints'][i][3][0]:
+                    initial_id = i
+                #     if sample['curr_gripper_history'][i][0][0]==sample['curr_gripper_history'][i][2][0]:
+                #         initial_id = i
+                if (i - initial_id) % 1 == 0:
+                    start_idx.append(i)
+            # image_rgb = sample['rgbs'][:, 0]
+            # image_select_rows = image_rgb[start_idx]
+            # conv_select = [conversations[i] for i in start_idx]
+
+            image_select_rows = sample['front_img']
+            image_clip, image, input_ids, attention_masks, targets = input_processing_carla_batch(
+                image_tensor=image_select_rows,
+                command_list=commands,
+                clip_image_processor=clip_image_processor,
+                tokenizer=tokenizer)
+
+            pred_actions_embedding, ce_loss, act_pred = LCB_model.module.model_forward(
+                images=image,
+                images_clip=image_clip,
+                input_ids=input_ids,
+                labels=targets,
+                target_point=sample['target_point'],
+                attention_masks=attention_masks,
+                tokenizer=tokenizer,
+                pred_len=self.args.pred_len,
+
             )
-            action = model(
-                sample["trajectory"].to(device),
-                sample["trajectory_mask"].to(device),
-                sample["rgbs"].to(device),
-                sample["pcds"].to(device),
-                total_action_embedding.to(device),
-                # sample["instr"].to(device),
-                curr_gripper.to(device),
+
+            total_action_embedding = torch.zeros(len(commands), pred_actions_embedding.shape[1])  # batch, 512
+            # print(total_action_embedding.shape)
+            # total_action_embedding = torch.zeros_like(pred_actions_embedding,device=pred_actions_embedding.device)
+            for i in range(len(commands)):
+                if i in start_idx:
+                    total_action_embedding[i] = pred_actions_embedding[start_idx.index(i)]
+                else:
+                    previous_idx = max([idx for idx in start_idx if idx < i])
+                    total_action_embedding[i] = total_action_embedding[previous_idx]
+
+            # revise 0305
+            total_action_embedding = total_action_embedding.unsqueeze(1)
+
+            speed = sample['speed'].to(dtype=torch.float32).view(-1, 1) / 12.
+            target_point = sample['target_point'].to(dtype=torch.float32)
+            command = sample['target_command']
+            state = torch.cat([speed, target_point, command], 1)
+
+            pred = model(
+                gt=sample,
+                img=sample["front_img"],
+                state=state,
+                target_point=target_point,
+                embedding=total_action_embedding.to(device),
                 run_inference=True
             )
+
             losses, losses_B = criterion.compute_metrics(
-                action,
-                sample["trajectory"].to(device),
-                sample["trajectory_mask"].to(device)
+                pred,
+                self.to_cuda(sample, device),
             )
 
             # Gather global statistics
@@ -207,27 +257,19 @@ class TrainTester(BaseTrainTester):
                 key = f"{split}-losses/mean/{n}"
                 if key not in values:
                     values[key] = torch.Tensor([]).to(device)
-                values[key] = torch.cat([values[key], l.unsqueeze(0)])
+                values[key] = torch.cat([values[key], torch.Tensor([l]).to(device)])
 
             # Gather per-task statistics
-            tasks = np.array(sample["task"])
-            for n, l in losses_B.items():
-                for task in np.unique(tasks):
-                    key = f"{split}-loss/{task}/{n}"
-                    l_task = l[tasks == task].mean()
-                    if key not in values:
-                        values[key] = torch.Tensor([]).to(device)
-                    values[key] = torch.cat([values[key], l_task.unsqueeze(0)])
 
             # Generate visualizations
-            if i == 0 and dist.get_rank() == 0 and step_id > -1:
-                viz_key = f'{split}-viz/viz'
-                viz = generate_visualizations(
-                    action,
-                    sample["trajectory"].to(device),
-                    sample["trajectory_mask"].to(device)
-                )
-                self.writer.add_image(viz_key, viz, step_id)
+            # if i == 0 and dist.get_rank() == 0 and step_id > -1:
+            #     viz_key = f'{split}-viz/viz'
+            #     viz = generate_visualizations(
+            #         action,
+            #         sample["trajectory"].to(device),
+            #         sample["trajectory_mask"].to(device)
+            #     )
+            #     self.writer.add_image(viz_key, viz, step_id)
 
         # Log all statistics
         values = self.synchronize_between_processes(values)
@@ -396,37 +438,39 @@ class TrajectoryCriterion:
         action_loss = torch.mean(kl_div[:, 0]) * 0.5 + torch.mean(kl_div[:, 1]) * 0.5
         speed_loss = F.l1_loss(pred['pred_speed'], speed) * speed_weight
 
-        value = gt['value'].view(-1, 1)
-        value_loss = (F.mse_loss(pred['pred_value_traj'], value) + F.mse_loss(pred['pred_value_ctrl'],
-                                                                              value)) * value_weight
-        feature = gt['feature']
-        feature_loss = (F.mse_loss(pred['pred_features_traj'], feature) + F.mse_loss(pred['pred_features_ctrl'],
-
-                                                                                     feature)) * features_weight
+        # value = gt['value'].view(-1, 1)
+        # value_loss = (F.mse_loss(pred['pred_value_traj'], value) + F.mse_loss(pred['pred_value_ctrl'],
+        #                                                                       value)) * value_weight
+        # feature = gt['feature']
+        # feature_loss = (F.mse_loss(pred['pred_features_traj'], feature) + F.mse_loss(pred['pred_features_ctrl'],
+        #
+        #                                                                              feature)) * features_weight
         gt_waypoints = gt['waypoints']
-        future_feature_loss = 0
-        future_action_loss = 0
-        for i in range(pred_len):
-            dist_sup = Beta(gt['future_action_mu'][i], gt['future_action_sigma'][i])
-            dist_pred = Beta(pred['future_mu'][i], pred['future_sigma'][i])
-            kl_div = torch.distributions.kl_divergence(dist_sup, dist_pred)
-            future_action_loss += torch.mean(kl_div[:, 0]) * 0.5 + torch.mean(kl_div[:, 1]) * 0.5
-            future_feature_loss += F.mse_loss(pred['future_feature'][i],
-                                              gt['future_feature'][i]) * features_weight
-        future_feature_loss /= pred_len
-        future_action_loss /= pred_len
+        # future_feature_loss = 0
+        # future_action_loss = 0
+        # for i in range(pred_len):
+        #     dist_sup = Beta(gt['future_action_mu'][i], gt['future_action_sigma'][i])
+        #     dist_pred = Beta(pred['future_mu'][i], pred['future_sigma'][i])
+        #     kl_div = torch.distributions.kl_divergence(dist_sup, dist_pred)
+        #     future_action_loss += torch.mean(kl_div[:, 0]) * 0.5 + torch.mean(kl_div[:, 1]) * 0.5
+        #     future_feature_loss += F.mse_loss(pred['future_feature'][i],
+        #                                       gt['future_feature'][i]) * features_weight
+        # future_feature_loss /= pred_len
+        # future_action_loss /= pred_len
         wp_loss = F.l1_loss(pred['pred_wp'], gt_waypoints, reduction='none').mean()
+        print('Actual waypoint：',gt_waypoints.cpu())
+        print('Predicted waypoint：', pred['pred_wp'].cpu())
 
         # Trajectory metrics
         loss = {
             'action_loss': action_loss.item(),
              'wp_loss': wp_loss.item(),
             'speed_loss': speed_loss.item(),
-            'future_action_loss': future_action_loss.item(),
+            # 'future_action_loss': future_action_loss.item(),
 
         }
         # loss = action_loss + speed_loss + value_loss + feature_loss + wp_loss+ future_feature_loss + future_action_loss
-        return loss
+        return loss, loss['action_loss']
 #
 #
 # def fig_to_numpy(fig, dpi=60):
@@ -480,7 +524,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=60, help='Number of train epochs.')
     parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate.')
     parser.add_argument('--val_every', type=int, default=3, help='Validation frequency (epochs).')
-    parser.add_argument('--batch_size', type=int, default=2, help='Batch size')
+    parser.add_argument('--batch_size', type=int, default=1, help='Batch size')
     parser.add_argument('--logdir', type=str, default='log', help='Directory to log data to.')
     parser.add_argument('--gpus', type=int, default=1, help='number of gpus')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
@@ -501,6 +545,9 @@ if __name__ == '__main__':
                         default="run", help='save log')
     parser.add_argument('--accumulate_grad_batches', type=int, default=4, help=' ')
     parser.add_argument('--val_freq', type=int, default=500, help=' ')
+    parser.add_argument('--eval_only', type=int, default=0, help=' ')
+    parser.add_argument('--val_iters', type=int, default=1, help='iteration number of first training.')
+
 
 
 
@@ -527,11 +574,11 @@ if __name__ == '__main__':
     random.seed(args.seed)
 
     # DDP initialization
-    # torch.cuda.set_device(args.local_rank)
-    # torch.distributed.init_process_group(backend='nccl', init_method='env://')
-    # torch.backends.cudnn.enabled = True
-    # torch.backends.cudnn.benchmark = True
-    # torch.backends.cudnn.deterministic = True
+    torch.cuda.set_device(args.local_rank)
+    torch.distributed.init_process_group(backend='nccl', init_method='env://')
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = True
 
     # Run
     train_tester = TrainTester(args)

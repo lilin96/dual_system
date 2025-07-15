@@ -200,10 +200,10 @@ class BaseTrainTester:
         # Move model to devices
         if torch.cuda.is_available():
             model = model.cuda()
-        # model = DistributedDataParallel(
-        #     model, device_ids=[self.args.local_rank],
-        #     broadcast_buffers=False, find_unused_parameters=True
-        # )
+        model = DistributedDataParallel(
+            model, device_ids=[self.args.local_rank],
+            broadcast_buffers=False, find_unused_parameters=True
+        )
 
         # Check for a checkpoint
         start_iter, best_loss = 0, None
@@ -211,18 +211,7 @@ class BaseTrainTester:
         #     assert os.path.isfile(self.args.training_checkpoint)
         #     start_iter, best_loss = self.load_checkpoint(model, optimizer)
 
-        # Eval only
-        # if bool(self.args.eval_only):
-        #     print("Test evaluation.......")
-        #     model.eval()
-        #     new_loss = self.evaluate_nsteps(
-        #         model, criterion, test_loader, step_id=-1,
-        #         val_iters=max(
-        #             5,
-        #             int(4 * len(self.args.tasks)/self.args.batch_size_val)
-        #         )
-        #     )
-        #     return model
+
         
         #===============LLM initialization（CLIP/tokenizer）==============
         llava_dir = self.args.llava_dir
@@ -232,6 +221,32 @@ class BaseTrainTester:
         torch_dtype = torch.bfloat16
         clip_image_processor, tokenizer, LCB_model = Model_init(vision_tower, llava_dir, torch_dtype)
         LCB_model.resize_token_embeddings(len(tokenizer))
+
+        # Eval only
+        if bool(self.args.eval_only):
+            print("Test evaluation.......")
+            if torch.cuda.is_available():
+                LCB_model = LCB_model.cuda()
+            else:
+                LCB_model = LCB_model.to(torch.device("mps"))
+            LCB_model = LCB_model.to(device)
+            LCB_model = DistributedDataParallel(
+                LCB_model, device_ids=[self.args.local_rank],
+                broadcast_buffers=False, find_unused_parameters=True
+            )
+
+            model.eval()
+            new_loss = self.evaluate_nsteps(
+                model, criterion, test_loader,
+                LCB_model.train(), clip_image_processor,tokenizer,
+                step_id=-1,
+                val_iters=max(
+                    5,
+                    5
+                ),
+
+            )
+            return model
         
         # Get LLM optimizer
         import torch.optim as optim
@@ -246,11 +261,11 @@ class BaseTrainTester:
             LCB_model = LCB_model.cuda()
         else:
             LCB_model = LCB_model.to(torch.device("mps"))
-        # LCB_model = LCB_model.to(device)
-        # LCB_model = DistributedDataParallel(
-        #     LCB_model, device_ids=[self.args.local_rank],
-        #     broadcast_buffers=False, find_unused_parameters=True
-        # )
+        LCB_model = LCB_model.to(device)
+        LCB_model = DistributedDataParallel(
+            LCB_model, device_ids=[self.args.local_rank],
+            broadcast_buffers=False, find_unused_parameters=True
+        )
 
         # Training loop
         iter_loader = iter(train_loader)
@@ -308,7 +323,19 @@ class BaseTrainTester:
             #     attention_masks=attention_masks,
             #     tokenizer=tokenizer,
             # )
-            pred_actions_embedding, ce_loss, act_pred = LCB_model.model_forward(
+            # pred_actions_embedding, ce_loss, act_pred = LCB_model.model_forward(
+            #     images=image,
+            #     images_clip=image_clip,
+            #     input_ids=input_ids,
+            #     labels=targets,
+            #     target_point=sample['target_point'],
+            #     attention_masks=attention_masks,
+            #     tokenizer=tokenizer,
+            #     pred_len = self.args.pred_len,
+            #
+            # )
+
+            pred_actions_embedding, ce_loss, act_pred = LCB_model.module.model_forward(
                 images=image,
                 images_clip=image_clip,
                 input_ids=input_ids,
@@ -316,11 +343,10 @@ class BaseTrainTester:
                 target_point=sample['target_point'],
                 attention_masks=attention_masks,
                 tokenizer=tokenizer,
-                pred_len = self.args.pred_len,
+                pred_len=self.args.pred_len,
 
             )
- 
-            
+
             # data sampling for asychronous traning
             #revise 0305
             total_action_embedding = torch.zeros(len(commands), pred_actions_embedding.shape[1])#batch, 512
@@ -344,8 +370,8 @@ class BaseTrainTester:
                 LLM_optimizer.step()
                 LLM_optimizer.zero_grad()
 
-            if dist.get_rank() == 0 and (step_id + 1) % (0.01 * self.args.val_freq) == 0:
-                self.writer.add_scalar("ce_loss", ce_loss, step_id)
+            # if dist.get_rank() == 0 and (step_id + 1) % (0.01 * self.args.val_freq) == 0:
+            #     self.writer.add_scalar("ce_loss", ce_loss, step_id)
                 # self.writer.add_scalar("clip_loss", clip_loss, step_id)
             if (step_id + 1) % self.args.val_freq == 0:
                 if dist.get_rank() == 0:  # save model
