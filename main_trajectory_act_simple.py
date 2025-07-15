@@ -105,6 +105,10 @@ class TrainTester(BaseTrainTester):
         #     else sample["curr_gripper_history"][:, -self.args.num_history:]
         # )
         aux_loss = 0
+        speed = sample['speed'].to(dtype=torch.float32).view(-1, 1) / 12.
+        target_point = sample['target_point'].to(dtype=torch.float32)
+        command = sample['target_command']
+        state = torch.cat([speed, target_point, command], 1)
         if (step_id + 1) < self.args.train_iters:
             # out = model(
             #     sample["trajectory"],
@@ -115,11 +119,6 @@ class TrainTester(BaseTrainTester):
             #     curr_gripper
             # )
             # sample = {k: v.to('cuda') if torch.is_tensor(v) else v for k, v in sample.items()}
-            speed = sample['speed'].to(dtype=torch.float32).view(-1, 1) / 12.
-            target_point = sample['target_point'].to(dtype=torch.float32)
-            command = sample['target_command']
-            state = torch.cat([speed, target_point, command], 1)
-
             out = model(
                 gt = sample,
                 img = sample["front_img"],
@@ -128,12 +127,14 @@ class TrainTester(BaseTrainTester):
                 embedding=embedding.cuda()
             )
         else:
+            # print(act_pred)
+            # act_pred=[act.cuda() for act in act_pred]
             out, aux_loss = model(
                 gt = sample,
                 img = sample["front_img"],
                 state=state,
                 target_point=target_point,
-                embedding=embedding,
+                embedding=embedding.cuda(),
                 act_pred=act_pred
             )
         if (step_id + 1) < self.args.train_iters:
@@ -155,10 +156,10 @@ class TrainTester(BaseTrainTester):
             optimizer.zero_grad()
 
         # Log
-        # if dist.get_rank() == 0 and (step_id + 1) % (0.01 * self.args.val_freq) == 0:
-        #     self.writer.add_scalar("lr", self.args.lr, step_id)
-        #     self.writer.add_scalar("action_loss", aux_loss, step_id)
-        #     self.writer.add_scalar("train-loss/noise_mse", loss, step_id)
+        if dist.get_rank() == 0 and (step_id + 1) % (0.01 * self.args.val_freq) == 0:
+            self.writer.add_scalar("lr", self.args.lr, step_id)
+            self.writer.add_scalar("action_loss", aux_loss, step_id)
+            self.writer.add_scalar("train-loss/noise_mse", loss, step_id)
 
 
     @torch.no_grad()
@@ -418,13 +419,14 @@ class TrajectoryCriterion:
         wp_loss = F.l1_loss(pred['pred_wp'], gt_waypoints, reduction='none').mean()
 
         # Trajectory metrics
-        loss = {
-            'action_loss': action_loss.item(),
-             'wp_loss': wp_loss.item(),
-            'speed_loss': speed_loss.item(),
-            'future_action_loss': future_action_loss.item(),
+        # loss = {
+        #     'action_loss': action_loss.item(),
+        #      'wp_loss': wp_loss.item(),
+        #     'speed_loss': speed_loss.item(),
+        #     'future_action_loss': future_action_loss.item(),
 
-        }
+        # }
+        loss = action_loss + wp_loss + speed_loss + future_action_loss
         # loss = action_loss + speed_loss + value_loss + feature_loss + wp_loss+ future_feature_loss + future_action_loss
         return loss
 #
@@ -477,22 +479,22 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--id', type=str, default='TCP', help='Unique experiment identifier.')
-    parser.add_argument('--epochs', type=int, default=60, help='Number of train epochs.')
+    # parser.add_argument('--epochs', type=int, default=60, help='Number of train epochs.')
     parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate.')
     parser.add_argument('--val_every', type=int, default=3, help='Validation frequency (epochs).')
-    parser.add_argument('--batch_size', type=int, default=2, help='Batch size')
-    parser.add_argument('--logdir', type=str, default='log', help='Directory to log data to.')
+    parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
+    # parser.add_argument('--logdir', type=str, default='log', help='Directory to log data to.')
     parser.add_argument('--gpus', type=int, default=1, help='number of gpus')
     parser.add_argument('--seed', type=int, default=0, help='Random seed')
     parser.add_argument('--num_workers', type=int, default=8, help='number of workers')
     parser.add_argument('--llava_dir', type=str,
-                        default="/home/users/ntu/keqichen/scratch/lilin_projects/pretrained/LLaVA-Lightning-7B-delta-v1-1", help='llava')
+                        default="/home/users/ntu/yongxias/scratch/lilin_projects/pretrained/LLaVA-Lightning-7B-delta-v1-1", help='llava')
     parser.add_argument('--vision_tower', type=str,
-                        default="/home/users/ntu/keqichen/scratch/lilin_projects/pretrained/clip-vit-large-patch14", help='vision tower')
+                        default="/home/users/ntu/yongxias/scratch/lilin_projects/pretrained/clip-vit-large-patch14", help='vision tower')
     parser.add_argument('--sample_rate', type=int, default=1, help='sample rate')
-    parser.add_argument('--stage2_train_iters', type=int, default=200_000, help='stage2_train_iters')
+    parser.add_argument('--stage2_train_iters', type=int, default=10_000, help='stage2_train_iters')
     parser.add_argument('--pred_len', type=int, default=4, help='Length of predicted trajectory.')
-    parser.add_argument('--train_iters', type=int, default=1000, help='iteration number of first training.')
+    parser.add_argument('--train_iters', type=int, default=10_000, help='iteration number of first training.')
     parser.add_argument('--base_log_dir', type=str,
                         default=Path(__file__).parent / "train_logs", help='save log')
     parser.add_argument('--exp_log_dir', type=str,
@@ -501,6 +503,8 @@ if __name__ == '__main__':
                         default="run", help='save log')
     parser.add_argument('--accumulate_grad_batches', type=int, default=4, help=' ')
     parser.add_argument('--val_freq', type=int, default=500, help=' ')
+    parser.add_argument('--training_checkpoint', type=str,
+                        default="/home/users/ntu/yongxias/scratch/lilin_projects/pretrained/TCP/tcp_b2d.ckpt", help='pretrained checkpoint')
 
 
 

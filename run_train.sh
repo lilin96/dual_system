@@ -6,7 +6,7 @@
 # diffusion_timesteps=25
 # B=15 
 # C=192
-ngpus=1 
+ngpus=1
 # backbone=clip
 # image_size="256,256"
 # relative_action=1
