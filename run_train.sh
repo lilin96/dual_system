@@ -1,4 +1,4 @@
-lr=3e-4
+lr=5e-5
 # lr=0.0003
 # wd=5e-3
 # dense_interpolation=1
@@ -7,7 +7,8 @@ lr=3e-4
 # diffusion_timesteps=25
 # B=15 
 # C=192
-ngpus=1
+batch_size=16
+ngpus=4
 # backbone=clip
 # image_size="256,256"
 # relative_action=1
@@ -17,9 +18,9 @@ ngpus=1
 # gripper_buffer=0.01
 # val_freq=500 
 # quaternion_format=wxyz
-run_log_dir='run_lr_0.0003'
-train_iters=67_000
-stage2_train_iters=100_000
+run_log_dir="run_lr_$lr"
+train_iters=670
+stage2_train_iters=10_000
 llava_dir='/home/users/ntu/yongxias/scratch/lilin_projects/pretrained/LLaVA-Lightning-7B-delta-v1-1'
 vision_tower='/home/users/ntu/yongxias/scratch/lilin_projects/pretrained/clip-vit-large-patch14'
 training_checkpoint='/home/users/ntu/yongxias/scratch/lilin_projects/pretrained/TCP/tcp_b2d.ckpt'
@@ -32,7 +33,7 @@ export PYTHONPATH=`pwd`:$PYTHONPATH
 CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port 12355 \
     main_trajectory_act_simple.py \
     --lr $lr \
-    --batch_size 8\
+    --batch_size $batch_size\
     --llava_dir $llava_dir \
     --vision_tower $vision_tower \
     --training_checkpoint $training_checkpoint\

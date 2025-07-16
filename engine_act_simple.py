@@ -10,6 +10,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
+from torch.utils.data.distributed import DistributedSampler
 import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 from collections import OrderedDict
@@ -76,16 +77,16 @@ class BaseTrainTester:
         # Samplers and loaders
         g = torch.Generator()
         g.manual_seed(0)
-        # train_sampler = DistributedSampler(train_dataset)
+        train_sampler = DistributedSampler(train_dataset)
         train_loader = DataLoader(
             train_dataset,
             batch_size=self.args.batch_size,
-            shuffle=True,
+            shuffle=False,
             num_workers=self.args.num_workers,
             worker_init_fn=seed_worker,
             collate_fn=collate_fn,
             pin_memory=True,
-            # sampler=train_sampler,
+            sampler=train_sampler,
             drop_last=True,
             generator=g
         )
@@ -99,12 +100,12 @@ class BaseTrainTester:
             worker_init_fn=seed_worker,
             collate_fn=collate_fn,
             pin_memory=True,
-            # sampler=train_sampler,
+            sampler=train_sampler,
             drop_last=True,
             generator=g
         )
 
-        # test_sampler = DistributedSampler(test_dataset, shuffle=True)
+        test_sampler = DistributedSampler(test_dataset, shuffle=True)
         test_loader = DataLoader(
             test_dataset,
             batch_size=self.args.batch_size,
@@ -113,7 +114,7 @@ class BaseTrainTester:
             worker_init_fn=seed_worker,
             collate_fn=collate_fn,
             pin_memory=True,
-            # sampler=test_sampler,
+            sampler=test_sampler,
             drop_last=False,
             generator=g
         )
@@ -217,8 +218,11 @@ class BaseTrainTester:
         # Check for a checkpoint
         start_iter, best_loss = 0, None
         if self.args.training_checkpoint:
-            # assert os.path.isfile(self.args.training_checkpoint)
-            start_iter, best_loss = self.load_checkpoint(model, optimizer)
+            assert os.path.isfile(self.args.training_checkpoint)
+            if 'tcp_b2d.ckpt' in self.args.training_checkpoint:
+                start_iter, best_loss = self.load_checkpoint(model, optimizer)
+            else:
+                start_iter, best_loss = self.load_trained_checkpoint(model, optimizer)  
 
         # Eval only
         if bool(self.args.eval_only):
@@ -231,6 +235,7 @@ class BaseTrainTester:
             torch_dtype = torch.bfloat16
 
             clip_image_processor, tokenizer, LCB_model = Model_init(vision_tower, llava_dir, token_dir, torch_dtype)
+            LCB_model.resize_token_embeddings(len(tokenizer))
 
             if torch.cuda.is_available():
                 LCB_model = LCB_model.cuda()
@@ -249,7 +254,7 @@ class BaseTrainTester:
             model.eval()
             new_loss = self.evaluate_nsteps(
                 model, criterion, test_loader,
-                LCB_model, clip_image_processor, tokenizer,
+                LCB_model.train(), clip_image_processor, tokenizer,
                 step_id=-1,
                 val_iters=max(
                     5,
@@ -258,12 +263,7 @@ class BaseTrainTester:
 
             )
             return model
-
-
-
-
-
-        
+      
         #===============LLM initialization（CLIP/tokenizer）==============
         llava_dir = self.args.llava_dir
         token_dir = self.args.token_dir
@@ -412,25 +412,25 @@ class BaseTrainTester:
         """Run a given number of evaluation steps."""
         return None
 
-    # def load_checkpoint(self, model, optimizer):
-    #     """Load from checkpoint."""
-    #     print("=> loading checkpoint '{}'".format(self.args.training_checkpoint))
+    def load_trained_checkpoint(self, model, optimizer):
+        """Load from checkpoint."""
+        print("=> loading checkpoint '{}'".format(self.args.training_checkpoint))
 
-    #     model_dict = torch.load(self.args.training_checkpoint, map_location="cuda")
-    #     model.load_state_dict(model_dict["weight"])
-    #     if 'optimizer' in model_dict:
-    #         optimizer.load_state_dict(model_dict["optimizer"])
-    #         for p in range(len(optimizer.param_groups)):
-    #             optimizer.param_groups[p]['lr'] = self.args.lr
-    #     start_iter = model_dict.get("iter", 0)
-    #     best_loss = model_dict.get("best_loss", None)
+        model_dict = torch.load(self.args.training_checkpoint, map_location="cuda")
+        model.load_state_dict(model_dict["weight"])
+        if 'optimizer' in model_dict:
+            optimizer.load_state_dict(model_dict["optimizer"])
+            for p in range(len(optimizer.param_groups)):
+                optimizer.param_groups[p]['lr'] = self.args.lr
+        start_iter = model_dict.get("iter", 0)
+        best_loss = model_dict.get("best_loss", None)
 
-    #     print("=> loaded successfully '{}' (step {})".format(
-    #         self.args.training_checkpoint, model_dict.get("iter", 0)
-    #     ))
-    #     del model_dict
-    #     torch.cuda.empty_cache()
-    #     return start_iter, best_loss
+        print("=> loaded successfully '{}' (step {})".format(
+            self.args.training_checkpoint, model_dict.get("iter", 0)
+        ))
+        del model_dict
+        torch.cuda.empty_cache()
+        return start_iter, best_loss
 
     def load_checkpoint(self, model, optimizer):
         """Load from checkpoint."""

@@ -104,6 +104,7 @@ class LISAForCausalLM(LlavaLlamaForCausalLM):
             attention_mask=attention_masks,
             input_ids=input_ids,
             output_hidden_states=True,
+            # return_dict=True
         )
         
         output_hidden_states = output.hidden_states 

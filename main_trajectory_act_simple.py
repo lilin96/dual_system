@@ -159,7 +159,7 @@ class TrainTester(BaseTrainTester):
         # Log
         if dist.get_rank() == 0 and (step_id + 1) % (0.01 * self.args.val_freq) == 0:
             self.writer.add_scalar("lr", self.args.lr, step_id)
-            self.writer.add_scalar("action_loss", aux_loss, step_id)
+            self.writer.add_scalar("action_loss", action_loss, step_id)
             self.writer.add_scalar("train-loss/noise_mse", loss, step_id)
 
 
@@ -555,7 +555,7 @@ if __name__ == '__main__':
     parser.add_argument('--accumulate_grad_batches', type=int, default=4, help=' ')
     parser.add_argument('--val_freq', type=int, default=500, help=' ')
     parser.add_argument('--eval_only', type=int, default=1, help=' ')
-    parser.add_argument('--val_iters', type=int, default=1, help='iteration number of first training.')
+    parser.add_argument('--val_iters', type=int, default=5, help='iteration number of first training.')
 
     parser.add_argument('--training_checkpoint', type=str,
                         default='/home/users/ntu/yongxias/scratch/lilin_projects/dual_system/train_logs/exp/run/best.pth', help='pretrained checkpoint')

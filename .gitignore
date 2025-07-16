@@ -1,6 +1,10 @@
 run_train.sh
 command.sh
 TCP/config.py
+qusb_script.sh
+rm_file.sh
+run_eval.sh
+
 
 __pycache__/
 TCP/__pycache__/

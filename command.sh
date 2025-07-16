@@ -8,7 +8,7 @@ pip install -r requirement.txt
 
 cd scratch/lilin_projects/dual_system
 
-qsub  -I -l select=1:ngpus=1 -P personal-yongxias -l walltime=30:00:00
+qsub  -I -l select=1:ngpus=1 -P personal-yongxias -l walltime=1:00:00
 module load cuda/12.2.2
 
 
