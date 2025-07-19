@@ -228,13 +228,12 @@ class BaseTrainTester:
         if bool(self.args.eval_only):
             print("Test evaluation.......")
             llava_dir = self.args.llava_dir
-            token_dir = self.args.token_dir
             vision_tower = self.args.vision_tower
             sample_rate = self.args.sample_rate
             device = "cuda" if torch.cuda.is_available() else "cpu"
             torch_dtype = torch.bfloat16
 
-            clip_image_processor, tokenizer, LCB_model = Model_init(vision_tower, llava_dir, token_dir, torch_dtype)
+            clip_image_processor, tokenizer, LCB_model = Model_init(vision_tower, llava_dir, torch_dtype)
             LCB_model.resize_token_embeddings(len(tokenizer))
 
             if torch.cuda.is_available():
@@ -266,13 +265,13 @@ class BaseTrainTester:
       
         #===============LLM initialization（CLIP/tokenizer）==============
         llava_dir = self.args.llava_dir
-        token_dir = self.args.token_dir
+        # token_dir = self.args.token_dir
         vision_tower = self.args.vision_tower
         sample_rate = self.args.sample_rate
         device = "cuda" if torch.cuda.is_available() else "cpu"
         torch_dtype = torch.bfloat16
 
-        clip_image_processor, tokenizer, LCB_model = Model_init(vision_tower, llava_dir, token_dir, torch_dtype)
+        clip_image_processor, tokenizer, LCB_model = Model_init(vision_tower, llava_dir, torch_dtype)
         LCB_model.resize_token_embeddings(len(tokenizer))
 
         # Get LLM optimizer

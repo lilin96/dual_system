@@ -247,8 +247,12 @@ class TCP(nn.Module):
 		future_feature_loss /= pred_len
 		future_action_loss /= pred_len
 		wp_loss = F.l1_loss(outputs['pred_wp'], gt_waypoints, reduction='none').mean()
-		loss = action_loss + speed_loss + value_loss + feature_loss + wp_loss + future_feature_loss + future_action_loss
 
+		feature_in = False
+		if feature_in :
+			loss = action_loss + speed_loss + value_loss + feature_loss + wp_loss + future_feature_loss + future_action_loss
+		else:
+			loss = action_loss+speed_loss+wp_loss+future_action_loss
 		if act_pred is None:
 			return loss
 		else:

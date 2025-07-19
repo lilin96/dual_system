@@ -1,4 +1,4 @@
-lr=5e-5
+lr=1e-4
 # lr=0.0003
 # wd=5e-3
 # dense_interpolation=1
@@ -7,7 +7,7 @@ lr=5e-5
 # diffusion_timesteps=25
 # B=15 
 # C=192
-batch_size=16
+batch_size=32
 ngpus=4
 # backbone=clip
 # image_size="256,256"
@@ -30,7 +30,7 @@ training_checkpoint='/home/users/ntu/keqichen/scratch/lilin_projects/pretrained/
 
 export PYTHONPATH=`pwd`:$PYTHONPATH
 
-CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port 12355 \
+CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port 12365 \
     main_trajectory_act_simple.py \
     --lr $lr \
     --batch_size $batch_size\
@@ -40,4 +40,4 @@ CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port 12355 \
     --stage2_train_iters $stage2_train_iters\
     --train_iters $train_iters\
     --run_log_dir $run_log_dir \
-    --eval_only 0 >> "runtrain.log" 2>&1 &
+    --eval_only 0 >> "runtrain2.log" 2>&1 &

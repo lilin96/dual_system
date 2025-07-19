@@ -1,0 +1,261 @@
+Arguments:
+Namespace(LCB_checkpoint='/home/users/ntu/keqichen/scratch/lilin_projects/dual_system/train_logs/exp/run_lr_1e-4/0008999/pytorch_model.bin', accumulate_grad_batches=1, base_log_dir=PosixPath('train_logs'), batch_size=1, eval_only=1, exp_log_dir='exp', gpus=1, id='TCP', llava_dir='/home/users/ntu/keqichen/scratch/lilin_projects/pretrained/LLaVA-Lightning-7B-delta-v1-1', log_dir=PosixPath('train_logs/exp/run_lr_1e-4_eval'), logdir='log', lr=0.0003, num_workers=8, pred_len=4, run_log_dir='run_lr_1e-4_eval', sample_rate=1, seed=0, stage2_train_iters=100000, token_dir='/home/users/ntu/yongxias/scratch/lilin_projects/pretrained/LLaVA-Lightning-7B-delta-v1-1', train_iters=67000, training_checkpoint='/home/users/ntu/keqichen/scratch/lilin_projects/dual_system/train_logs/exp/run_lr_1e-4/best.pth', val_every=3, val_freq=500, val_iters=5, vision_tower='/home/users/ntu/keqichen/scratch/lilin_projects/pretrained/clip-vit-large-patch14')
+----------------------------------------------------------------------------------------------------
+Logging: train_logs/exp/run_lr_1e-4_eval
+Available devices (CUDA_VISIBLE_DEVICES): GPU-eb0f28df-f80e-95b5-2870-8aa26a9cf2db
+Device count 1
+Model parameters: 26030209
+=> loading checkpoint '/home/users/ntu/keqichen/scratch/lilin_projects/dual_system/train_logs/exp/run_lr_1e-4/best.pth'
+=> loaded successfully '/home/users/ntu/keqichen/scratch/lilin_projects/dual_system/train_logs/exp/run_lr_1e-4/best.pth' (step 9000)
+Test evaluation.......
+You are using the legacy behaviour of the <class 'transformers.models.llama.tokenization_llama.LlamaTokenizer'>. This means that tokens that come after special tokens will not be properly handled. We recommend you to read the related pull request available at https://github.com/huggingface/transformers/pull/24565
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:02<00:02,  2.73s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:03<00:00,  1.75s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:03<00:00,  1.89s/it]
+Some weights of LISAForCausalLM were not initialized from the model checkpoint at /home/users/ntu/keqichen/scratch/lilin_projects/pretrained/LLaVA-Lightning-7B-delta-v1-1 and are newly initialized: ['model.decoder_traj.weight_ih', 'model.decoder_traj.bias_hh', 'model.pred_act_mlps.weight', 'model.text_hidden_fcs.0.0.bias', 'model.text_hidden_fcs.0.0.weight', 'model.decoder_traj.bias_ih', 'model.decoder_traj.weight_hh', 'model.pred_traj.bias', 'model.pred_act_mlps.bias', 'model.pred_traj.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+n:  model.text_hidden_fcs.0.0.weight p.shape:  torch.Size([512, 4096])
+n:  model.text_hidden_fcs.0.0.bias p.shape:  torch.Size([512])
+n:  model.decoder_traj.weight_ih p.shape:  torch.Size([6144, 4])
+n:  model.decoder_traj.weight_hh p.shape:  torch.Size([6144, 2048])
+n:  model.decoder_traj.bias_ih p.shape:  torch.Size([6144])
+n:  model.decoder_traj.bias_hh p.shape:  torch.Size([6144])
+n:  model.pred_traj.weight p.shape:  torch.Size([2, 2048])
+n:  model.pred_traj.bias p.shape:  torch.Size([2])
+/home/users/ntu/keqichen/miniconda3/envs/dual/lib/python3.8/site-packages/torch/utils/checkpoint.py:429: UserWarning: torch.utils.checkpoint: please pass in use_reentrant=True or use_reentrant=False explicitly. The default value of use_reentrant will be updated to be False in the future. To maintain current behavior, pass use_reentrant=True. It is recommended that you use use_reentrant=False. Refer to docs for more details on the differences between the two variants.
+  warnings.warn(
+/home/users/ntu/keqichen/miniconda3/envs/dual/lib/python3.8/site-packages/torch/utils/checkpoint.py:61: UserWarning: None of the inputs have requires_grad=True. Gradients will be None
+  warnings.warn(
+/home/users/ntu/keqichen/miniconda3/envs/dual/lib/python3.8/site-packages/torch/nn/functional.py:1345: UserWarning: dropout2d: Received a 2-D input to dropout2d, which is deprecated and will result in an error in a future release. To retain the behavior and silence this warning, please use dropout instead. Note that dropout2d exists to provide channel-wise dropout on inputs with 2 spatial dimensions, a channel dimension, and an optional batch dimension (i.e. 3D or 4D inputs).
+  warnings.warn(warn_msg)
+Actual waypoint： tensor([[[ 9.3827e-03, -2.9395e+00],
+         [-1.2493e-03, -4.9904e+00],
+         [-1.4966e-02, -6.7770e+00],
+         [-4.1840e-02, -9.2751e+00]]], dtype=torch.float64)
+Predicted waypoint： tensor([[[-0.0185, -2.8383],
+         [-0.0431, -5.2466],
+         [-0.0695, -7.1396],
+         [-0.0824, -8.6431]]])
+action_loss: 0.1370847225189209
+wp_loss: 0.18960600569798292
+speed_loss: 0.002596002770587802
+Actual waypoint： tensor([[[-2.6244e-03, -2.0596e+00],
+         [-1.8854e-02, -4.0675e+00],
+         [-2.9287e-02, -6.7762e+00],
+         [-3.4614e-02, -8.7323e+00]]], dtype=torch.float64)
+Predicted waypoint： tensor([[[-0.0134, -2.1597],
+         [-0.0157, -4.2330],
+         [-0.0282, -6.3544],
+         [-0.0378, -8.3686]]])
+action_loss: 3.584301471710205
+wp_loss: 0.13368045394062644
+speed_loss: 0.006310850381851196
+Actual waypoint： tensor([[[-3.6910e-03, -1.3438e+00],
+         [-5.4174e-03, -1.5082e+00],
+         [-5.4260e-03, -1.5085e+00],
+         [-1.4522e-03, -1.5861e+00]]], dtype=torch.float64)
+Predicted waypoint： tensor([[[-0.0064, -0.7648],
+         [-0.0062, -1.1100],
+         [-0.0028, -1.4710],
+         [ 0.0040, -1.8496]]])
+action_loss: 0.09884512424468994
+wp_loss: 0.16124357573327133
+speed_loss: 0.0012406230671331286
+Actual waypoint： tensor([[[ 1.2117e-03, -1.4868e+00],
+         [ 1.4688e-02, -3.3526e+00],
+         [ 1.3959e-02, -5.4602e+00],
+         [ 2.3147e-02, -7.1665e+00]]], dtype=torch.float64)
+Predicted waypoint： tensor([[[ 2.1184e-03, -1.9004e+00],
+         [ 8.6664e-03, -3.7345e+00],
+         [ 1.2572e-02, -5.5718e+00],
+         [ 2.0935e-02, -7.2325e+00]]])
+action_loss: 4.021740436553955
+wp_loss: 0.12295057718071964
+speed_loss: 0.005890341009944677
+Actual waypoint： tensor([[[ 0.0201, -2.2571],
+         [ 0.0417, -3.4958],
+         [ 0.0565, -5.0543],
+         [ 0.0873, -7.4992]]], dtype=torch.float64)
+Predicted waypoint： tensor([[[ 0.0135, -2.3951],
+         [ 0.0443, -4.5008],
+         [ 0.0605, -6.6222],
+         [ 0.0743, -8.6509]]])
+action_loss: 3.156085968017578
+wp_loss: 0.48609091192815557
+speed_loss: 0.0011229858500882983
+Step -1:
+val-losses/mean/action_loss: 2.200
+val-losses/mean/wp_loss: 0.219
+val-losses/mean/speed_loss: 0.003
+Arguments:
+Namespace(LCB_checkpoint='/home/users/ntu/keqichen/scratch/lilin_projects/dual_system/train_logs/exp/run_lr_1e-4/0008999/pytorch_model.bin', accumulate_grad_batches=1, base_log_dir=PosixPath('train_logs'), batch_size=1, eval_only=1, exp_log_dir='exp', gpus=1, id='TCP', llava_dir='/home/users/ntu/keqichen/scratch/lilin_projects/pretrained/LLaVA-Lightning-7B-delta-v1-1', log_dir=PosixPath('train_logs/exp/run_lr_1e-4_eval'), logdir='log', lr=0.0003, num_workers=8, pred_len=4, run_log_dir='run_lr_1e-4_eval', sample_rate=1, seed=0, stage2_train_iters=100000, token_dir='/home/users/ntu/yongxias/scratch/lilin_projects/pretrained/LLaVA-Lightning-7B-delta-v1-1', train_iters=67000, training_checkpoint='/home/users/ntu/keqichen/scratch/lilin_projects/dual_system/train_logs/exp/run_lr_1e-4/best.pth', val_every=3, val_freq=500, val_iters=5, vision_tower='/home/users/ntu/keqichen/scratch/lilin_projects/pretrained/clip-vit-large-patch14')
+----------------------------------------------------------------------------------------------------
+Logging: train_logs/exp/run_lr_1e-4_eval
+Available devices (CUDA_VISIBLE_DEVICES): GPU-0153a9bf-b17d-07fb-15c3-c17bf90e4e22
+Device count 1
+Model parameters: 26030209
+=> loading checkpoint '/home/users/ntu/keqichen/scratch/lilin_projects/dual_system/train_logs/exp/run_lr_1e-4/best.pth'
+=> loaded successfully '/home/users/ntu/keqichen/scratch/lilin_projects/dual_system/train_logs/exp/run_lr_1e-4/best.pth' (step 9000)
+Test evaluation.......
+You are using the legacy behaviour of the <class 'transformers.models.llama.tokenization_llama.LlamaTokenizer'>. This means that tokens that come after special tokens will not be properly handled. We recommend you to read the related pull request available at https://github.com/huggingface/transformers/pull/24565
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:44<00:44, 44.99s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:58<00:00, 26.58s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:58<00:00, 29.34s/it]
+Some weights of LISAForCausalLM were not initialized from the model checkpoint at /home/users/ntu/keqichen/scratch/lilin_projects/pretrained/LLaVA-Lightning-7B-delta-v1-1 and are newly initialized: ['model.pred_traj.weight', 'model.text_hidden_fcs.0.0.weight', 'model.pred_act_mlps.bias', 'model.pred_act_mlps.weight', 'model.decoder_traj.bias_hh', 'model.decoder_traj.weight_ih', 'model.decoder_traj.bias_ih', 'model.text_hidden_fcs.0.0.bias', 'model.decoder_traj.weight_hh', 'model.pred_traj.bias']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+n:  model.text_hidden_fcs.0.0.weight p.shape:  torch.Size([512, 4096])
+n:  model.text_hidden_fcs.0.0.bias p.shape:  torch.Size([512])
+n:  model.decoder_traj.weight_ih p.shape:  torch.Size([6144, 4])
+n:  model.decoder_traj.weight_hh p.shape:  torch.Size([6144, 2048])
+n:  model.decoder_traj.bias_ih p.shape:  torch.Size([6144])
+n:  model.decoder_traj.bias_hh p.shape:  torch.Size([6144])
+n:  model.pred_traj.weight p.shape:  torch.Size([2, 2048])
+n:  model.pred_traj.bias p.shape:  torch.Size([2])
+/home/users/ntu/keqichen/miniconda3/envs/dual/lib/python3.8/site-packages/torch/utils/checkpoint.py:429: UserWarning: torch.utils.checkpoint: please pass in use_reentrant=True or use_reentrant=False explicitly. The default value of use_reentrant will be updated to be False in the future. To maintain current behavior, pass use_reentrant=True. It is recommended that you use use_reentrant=False. Refer to docs for more details on the differences between the two variants.
+  warnings.warn(
+/home/users/ntu/keqichen/miniconda3/envs/dual/lib/python3.8/site-packages/torch/utils/checkpoint.py:61: UserWarning: None of the inputs have requires_grad=True. Gradients will be None
+  warnings.warn(
+/home/users/ntu/keqichen/miniconda3/envs/dual/lib/python3.8/site-packages/torch/nn/functional.py:1345: UserWarning: dropout2d: Received a 2-D input to dropout2d, which is deprecated and will result in an error in a future release. To retain the behavior and silence this warning, please use dropout instead. Note that dropout2d exists to provide channel-wise dropout on inputs with 2 spatial dimensions, a channel dimension, and an optional batch dimension (i.e. 3D or 4D inputs).
+  warnings.warn(warn_msg)
+Actual waypoint： tensor([[[ 9.3827e-03, -2.9395e+00],
+         [-1.2493e-03, -4.9904e+00],
+         [-1.4966e-02, -6.7770e+00],
+         [-4.1840e-02, -9.2751e+00]]], dtype=torch.float64)
+Predicted waypoint： tensor([[[-0.0185, -2.8383],
+         [-0.0431, -5.2467],
+         [-0.0695, -7.1396],
+         [-0.0824, -8.6432]]])
+action_loss: 0.13711786270141602
+wp_loss: 0.18960787951900304
+speed_loss: 0.0025959834456443787
+Actual waypoint： tensor([[[-2.6244e-03, -2.0596e+00],
+         [-1.8854e-02, -4.0675e+00],
+         [-2.9287e-02, -6.7762e+00],
+         [-3.4614e-02, -8.7323e+00]]], dtype=torch.float64)
+Predicted waypoint： tensor([[[-0.0134, -2.1598],
+         [-0.0157, -4.2331],
+         [-0.0282, -6.3544],
+         [-0.0378, -8.3687]]])
+action_loss: 3.5846054553985596
+wp_loss: 0.13367785648196584
+speed_loss: 0.006310795433819294
+Actual waypoint： tensor([[[-3.6910e-03, -1.3438e+00],
+         [-5.4174e-03, -1.5082e+00],
+         [-5.4260e-03, -1.5085e+00],
+         [-1.4522e-03, -1.5861e+00]]], dtype=torch.float64)
+Predicted waypoint： tensor([[[-0.0065, -0.7648],
+         [-0.0063, -1.1101],
+         [-0.0028, -1.4713],
+         [ 0.0040, -1.8500]]])
+action_loss: 0.09884107112884521
+wp_loss: 0.16123567625519344
+speed_loss: 0.0012405262095853686
+Actual waypoint： tensor([[[ 1.2117e-03, -1.4868e+00],
+         [ 1.4688e-02, -3.3526e+00],
+         [ 1.3959e-02, -5.4602e+00],
+         [ 2.3147e-02, -7.1665e+00]]], dtype=torch.float64)
+Predicted waypoint： tensor([[[ 2.1188e-03, -1.9005e+00],
+         [ 8.6651e-03, -3.7345e+00],
+         [ 1.2571e-02, -5.5719e+00],
+         [ 2.0933e-02, -7.2325e+00]]])
+action_loss: 4.022735595703125
+wp_loss: 0.12297208980087068
+speed_loss: 0.005890515632927418
+Actual waypoint： tensor([[[ 0.0201, -2.2571],
+         [ 0.0417, -3.4958],
+         [ 0.0565, -5.0543],
+         [ 0.0873, -7.4992]]], dtype=torch.float64)
+Predicted waypoint： tensor([[[ 0.0135, -2.3951],
+         [ 0.0443, -4.5007],
+         [ 0.0605, -6.6222],
+         [ 0.0743, -8.6510]]])
+action_loss: 3.1548397541046143
+wp_loss: 0.4860907787490274
+speed_loss: 0.0011237756116315722
+Step -1:
+val-losses/mean/action_loss: 2.200
+val-losses/mean/wp_loss: 0.219
+val-losses/mean/speed_loss: 0.003
+Arguments:
+Namespace(LCB_checkpoint='/home/users/ntu/keqichen/scratch/lilin_projects/dual_system/train_logs/exp/run_lr_5e-5/0007499/pytorch_model.bin', accumulate_grad_batches=1, base_log_dir=PosixPath('train_logs'), batch_size=1, eval_only=1, exp_log_dir='exp', gpus=1, id='TCP', llava_dir='/home/users/ntu/keqichen/scratch/lilin_projects/pretrained/LLaVA-Lightning-7B-delta-v1-1', log_dir=PosixPath('train_logs/exp/run_lr_1e-4_eval'), logdir='log', lr=0.0003, num_workers=8, pred_len=4, run_log_dir='run_lr_1e-4_eval', sample_rate=1, seed=0, stage2_train_iters=100000, token_dir='/home/users/ntu/yongxias/scratch/lilin_projects/pretrained/LLaVA-Lightning-7B-delta-v1-1', train_iters=67000, training_checkpoint='/home/users/ntu/keqichen/scratch/lilin_projects/dual_system/train_logs/exp/run_lr_5e-5/best.pth', val_every=3, val_freq=500, val_iters=5, vision_tower='/home/users/ntu/keqichen/scratch/lilin_projects/pretrained/clip-vit-large-patch14')
+----------------------------------------------------------------------------------------------------
+Logging: train_logs/exp/run_lr_1e-4_eval
+Available devices (CUDA_VISIBLE_DEVICES): GPU-0153a9bf-b17d-07fb-15c3-c17bf90e4e22
+Device count 1
+Model parameters: 26030209
+=> loading checkpoint '/home/users/ntu/keqichen/scratch/lilin_projects/dual_system/train_logs/exp/run_lr_5e-5/best.pth'
+=> loaded successfully '/home/users/ntu/keqichen/scratch/lilin_projects/dual_system/train_logs/exp/run_lr_5e-5/best.pth' (step 7500)
+Test evaluation.......
+You are using the legacy behaviour of the <class 'transformers.models.llama.tokenization_llama.LlamaTokenizer'>. This means that tokens that come after special tokens will not be properly handled. We recommend you to read the related pull request available at https://github.com/huggingface/transformers/pull/24565
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:11<00:11, 11.22s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:12<00:00,  5.29s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:12<00:00,  6.18s/it]
+Some weights of LISAForCausalLM were not initialized from the model checkpoint at /home/users/ntu/keqichen/scratch/lilin_projects/pretrained/LLaVA-Lightning-7B-delta-v1-1 and are newly initialized: ['model.pred_act_mlps.bias', 'model.decoder_traj.weight_hh', 'model.decoder_traj.bias_ih', 'model.pred_act_mlps.weight', 'model.pred_traj.bias', 'model.decoder_traj.bias_hh', 'model.text_hidden_fcs.0.0.weight', 'model.pred_traj.weight', 'model.text_hidden_fcs.0.0.bias', 'model.decoder_traj.weight_ih']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+n:  model.text_hidden_fcs.0.0.weight p.shape:  torch.Size([512, 4096])
+n:  model.text_hidden_fcs.0.0.bias p.shape:  torch.Size([512])
+n:  model.decoder_traj.weight_ih p.shape:  torch.Size([6144, 4])
+n:  model.decoder_traj.weight_hh p.shape:  torch.Size([6144, 2048])
+n:  model.decoder_traj.bias_ih p.shape:  torch.Size([6144])
+n:  model.decoder_traj.bias_hh p.shape:  torch.Size([6144])
+n:  model.pred_traj.weight p.shape:  torch.Size([2, 2048])
+n:  model.pred_traj.bias p.shape:  torch.Size([2])
+/home/users/ntu/keqichen/miniconda3/envs/dual/lib/python3.8/site-packages/torch/utils/checkpoint.py:429: UserWarning: torch.utils.checkpoint: please pass in use_reentrant=True or use_reentrant=False explicitly. The default value of use_reentrant will be updated to be False in the future. To maintain current behavior, pass use_reentrant=True. It is recommended that you use use_reentrant=False. Refer to docs for more details on the differences between the two variants.
+  warnings.warn(
+/home/users/ntu/keqichen/miniconda3/envs/dual/lib/python3.8/site-packages/torch/utils/checkpoint.py:61: UserWarning: None of the inputs have requires_grad=True. Gradients will be None
+  warnings.warn(
+/home/users/ntu/keqichen/miniconda3/envs/dual/lib/python3.8/site-packages/torch/nn/functional.py:1345: UserWarning: dropout2d: Received a 2-D input to dropout2d, which is deprecated and will result in an error in a future release. To retain the behavior and silence this warning, please use dropout instead. Note that dropout2d exists to provide channel-wise dropout on inputs with 2 spatial dimensions, a channel dimension, and an optional batch dimension (i.e. 3D or 4D inputs).
+  warnings.warn(warn_msg)
+Actual waypoint： tensor([[[ 9.3827e-03, -2.9395e+00],
+         [-1.2493e-03, -4.9904e+00],
+         [-1.4966e-02, -6.7770e+00],
+         [-4.1840e-02, -9.2751e+00]]], dtype=torch.float64)
+Predicted waypoint： tensor([[[-0.0125, -2.7220],
+         [-0.0126, -5.0114],
+         [-0.0311, -7.0590],
+         [-0.0452, -8.9082]]])
+action_loss: 0.035059452056884766
+wp_loss: 0.11753120683087648
+speed_loss: 0.0010169744491577148
+Actual waypoint： tensor([[[-2.6244e-03, -2.0596e+00],
+         [-1.8854e-02, -4.0675e+00],
+         [-2.9287e-02, -6.7762e+00],
+         [-3.4614e-02, -8.7323e+00]]], dtype=torch.float64)
+Predicted waypoint： tensor([[[ 5.2093e-03, -1.9203e+00],
+         [ 1.0869e-02, -3.9067e+00],
+         [ 4.9378e-03, -5.9021e+00],
+         [ 4.2977e-03, -7.8218e+00]]])
+action_loss: 0.2203197479248047
+wp_loss: 0.2744189438349779
+speed_loss: 0.0017159134149551392
+Actual waypoint： tensor([[[-3.6910e-03, -1.3438e+00],
+         [-5.4174e-03, -1.5082e+00],
+         [-5.4260e-03, -1.5085e+00],
+         [-1.4522e-03, -1.5861e+00]]], dtype=torch.float64)
+Predicted waypoint： tensor([[[-2.8830e-03, -1.7879e-01],
+         [ 4.3616e-04, -1.0135e+00],
+         [ 2.6084e-03, -2.2383e+00],
+         [ 3.4763e-03, -3.5714e+00]]])
+action_loss: 0.10485589504241943
+wp_loss: 0.5493137728978097
+speed_loss: 0.006943556945770979
+Actual waypoint： tensor([[[ 1.2117e-03, -1.4868e+00],
+         [ 1.4688e-02, -3.3526e+00],
+         [ 1.3959e-02, -5.4602e+00],
+         [ 2.3147e-02, -7.1665e+00]]], dtype=torch.float64)
+Predicted waypoint： tensor([[[ 0.0225, -1.6453],
+         [ 0.0444, -3.4629],
+         [ 0.0553, -5.3392],
+         [ 0.0710, -7.1447]]])
+action_loss: 0.9148702621459961
+wp_loss: 0.06899167302083695
+speed_loss: 0.004324762616306543
+Actual waypoint： tensor([[[ 0.0201, -2.2571],
+         [ 0.0417, -3.4958],
+         [ 0.0565, -5.0543],
+         [ 0.0873, -7.4992]]], dtype=torch.float64)
+Predicted waypoint： tensor([[[ 0.0215, -1.9006],
+         [ 0.0501, -4.0724],
+         [ 0.0713, -6.3676],
+         [ 0.1006, -8.6259]]])
+action_loss: 0.03790402412414551
+wp_loss: 0.42640109952042055
+speed_loss: 0.0011783138616010547
+Step -1:
+val-losses/mean/action_loss: 0.263
+val-losses/mean/wp_loss: 0.287
+val-losses/mean/speed_loss: 0.003

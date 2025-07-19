@@ -552,7 +552,7 @@ if __name__ == '__main__':
                         default="exp", help='save log')
     parser.add_argument('--run_log_dir', type=str,
                         default="run", help='save log')
-    parser.add_argument('--accumulate_grad_batches', type=int, default=4, help=' ')
+    parser.add_argument('--accumulate_grad_batches', type=int, default=1, help=' ')
     parser.add_argument('--val_freq', type=int, default=500, help=' ')
     parser.add_argument('--eval_only', type=int, default=1, help=' ')
     parser.add_argument('--val_iters', type=int, default=5, help='iteration number of first training.')
